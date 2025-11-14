@@ -1,0 +1,27 @@
+spring:
+  lifecycle:
+    timeout-per-shutdown-phase: 30000
+  config:
+    import:
+      - optional:nacos:nacos-likes-test.yaml
+  application:
+    name: Activity-Comments-Likes
+  cloud:
+    nacos:
+      server-addr: 123.56.138.127:8848
+      config:
+        shared-configs: [ ]
+        extension-configs: [ ]
+        username: nacos
+        password: VxykvMqce3
+        namespace: public
+        group: DEFAULT_GROUP
+        prefix: nacos-likes
+        file-extension: yaml
+        import-check:
+          enabled: false
+      discovery:
+        username: nacos
+        password: VxykvMqce3
+  profiles:
+    active: test

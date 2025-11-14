@@ -21,9 +21,16 @@ import lombok.extern.slf4j.Slf4j;
 import org.redisson.api.RBloomFilter;
 import org.redisson.api.RLock;
 import org.redisson.api.RedissonClient;
-import org.springframework.data.redis.core.RedisTemplate;
+import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.data.redis.core.script.DefaultRedisScript;
+import com.example.filter.generator.mapper.SysUserMapper;
+import com.example.filter.generator.domain.SysUser;
+import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.data.redis.core.HashOperations;
 
 import java.math.BigDecimal;
 import java.util.*;
@@ -39,7 +46,10 @@ import static com.example.activity.es.activity.ActivityIndexService.DEFAULT_PAGE
 public class ActivityController {
 
     @Resource
-    private RedisTemplate<String, String> redisTemplate;
+    private StringRedisTemplate stringRedisTemplate;
+
+    @Resource
+    private SysUserMapper sysUserMapper;
 
     @Resource
     private ActivitiesService activitiesService;
@@ -53,6 +63,7 @@ public class ActivityController {
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     private static final String ACTIVITY_KEY_PREFIX = "activity:";
+    private static final String ACTIVITY_CHANGED_SET = "changed:activities";
     private static final String ACTIVITY_BLOOM_FILTER_KEY = "activity:bloom";
 
     private RBloomFilter<String> bloomFilter;
@@ -64,10 +75,10 @@ public class ActivityController {
     }
 
     @GetMapping("/activity/test")
-    public SuccessDTO test() {
+    public MessageDTO test() {
         Map<String, Object> map = new HashMap<>();
         map.put("msg", "测试接口成功");
-        return new SuccessDTO(map);
+        return new SuccessDTO<>(map);
     }
 
     @PostMapping("/activity")
@@ -122,27 +133,40 @@ public class ActivityController {
         }
 
         String key = ACTIVITY_KEY_PREFIX + id;
-        Map<Object, Object> cachedJson = redisTemplate.opsForHash().entries(key); // 获取整个哈希结构
+        Map<Object, Object> cachedJson = stringRedisTemplate.opsForHash().entries(key);
         if (cachedJson != null && !cachedJson.isEmpty()) {
-            // 如果Redis缓存命中
             try {
                 Activities cachedActivity = new Activities();
-                // 从缓存中填充Activity对象
-                cachedActivity.setId((Integer) cachedJson.get("id"));
+                String sId = (String) cachedJson.get("id");
+                if (sId != null) cachedActivity.setId(Integer.parseInt(sId));
                 cachedActivity.setTitle((String) cachedJson.get("title"));
                 cachedActivity.setDescription((String) cachedJson.get("description"));
-                cachedActivity.setCountLikes((Integer) cachedJson.get("countLikes"));
-                cachedActivity.setCountComments((Integer) cachedJson.get("countComments"));
-                cachedActivity.setCountViews((Integer) cachedJson.get("countViews"));
-                cachedActivity.setCountFavorite((Integer) cachedJson.get("countFavorite"));
-                cachedActivity.setLatitude((Double) cachedJson.get("latitude"));
-                cachedActivity.setLongitude((Double) cachedJson.get("longitude"));
-                cachedActivity.setTime((Date) cachedJson.get("time"));
+                String sLikes = (String) cachedJson.get("countLikes");
+                if (sLikes != null) cachedActivity.setCountLikes(Integer.parseInt(sLikes));
+                String sComments = (String) cachedJson.get("countComments");
+                if (sComments != null) cachedActivity.setCountComments(Integer.parseInt(sComments));
+                String sViews = (String) cachedJson.get("countViews");
+                if (sViews != null) cachedActivity.setCountViews(Integer.parseInt(sViews));
+                String sFav = (String) cachedJson.get("countFavorite");
+                if (sFav != null) cachedActivity.setCountFavorite(Integer.parseInt(sFav));
+                String sLat = (String) cachedJson.get("latitude");
+                if (sLat != null) cachedActivity.setLatitude(Double.parseDouble(sLat));
+                String sLng = (String) cachedJson.get("longitude");
+                if (sLng != null) cachedActivity.setLongitude(Double.parseDouble(sLng));
+                String sTime = (String) cachedJson.get("time");
+                if (sTime != null) {
+                    try { cachedActivity.setTime(new java.util.Date(java.time.Instant.parse(sTime).toEpochMilli())); } catch (Exception ignore) {}
+                }
                 cachedActivity.setTags((String) cachedJson.get("tags"));
-                cachedActivity.setIsTop((Integer) cachedJson.get("isTop"));
-                cachedActivity.setTopTime((Date) cachedJson.get("topTime"));
+                String sTop = (String) cachedJson.get("isTop");
+                if (sTop != null) cachedActivity.setIsTop(Integer.parseInt(sTop));
+                String sTopTime = (String) cachedJson.get("topTime");
+                if (sTopTime != null) {
+                    try { cachedActivity.setTopTime(new java.util.Date(java.time.Instant.parse(sTopTime).toEpochMilli())); } catch (Exception ignore) {}
+                }
                 cachedActivity.setAuthorImage((String) cachedJson.get("authorImage"));
-                cachedActivity.setCountPhotos((Integer) cachedJson.get("countPhotos"));
+                String sPhotos = (String) cachedJson.get("countPhotos");
+                if (sPhotos != null) cachedActivity.setCountPhotos(Integer.parseInt(sPhotos));
                 return new SuccessDTO<>(cachedActivity);
             } catch (Exception e) {
                 log.warn("Redis缓存反序列化失败，回退DB。key={}, err={}", key, e.getMessage());
@@ -212,7 +236,7 @@ public class ActivityController {
         if (!exists) {
             return new FailureDTO<>(Messages.NOT_FOUND, "布隆过滤器发力了");
         }
-        redisTemplate.delete(ACTIVITY_KEY_PREFIX + id);
+        stringRedisTemplate.delete(ACTIVITY_KEY_PREFIX + id);
 
         boolean removed = activitiesService.removeById(id);// 删除MySQL缓存
         if (!removed) {
@@ -319,10 +343,10 @@ public class ActivityController {
         hashData.put("countFavorite", String.valueOf(activities.getCountFavorite()));
         hashData.put("latitude", String.valueOf(activities.getLatitude()));
         hashData.put("longitude", String.valueOf(activities.getLongitude()));
-        hashData.put("time", activities.getTime().toString());
+        hashData.put("time", java.time.Instant.ofEpochMilli(activities.getTime().getTime()).toString());
         hashData.put("tags", activities.getTags());
         hashData.put("isTop", String.valueOf(activities.getIsTop()));
-        hashData.put("topTime", activities.getTopTime() != null ? activities.getTopTime().toString() : null);
+        hashData.put("topTime", activities.getTopTime() != null ? java.time.Instant.ofEpochMilli(activities.getTopTime().getTime()).toString() : null);
         hashData.put("authorImage", activities.getAuthorImage());
         hashData.put("countPhotos", String.valueOf(activities.getCountPhotos()));
 
@@ -332,8 +356,66 @@ public class ActivityController {
                 .filter(entry -> entry.getValue() != null)
                 .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
 
-        redisTemplate.opsForHash().putAll(key, filteredHashData);
-        Boolean expire = redisTemplate.expire(key, 1, TimeUnit.HOURS);
+        stringRedisTemplate.opsForHash().putAll(key, filteredHashData);
+        Boolean expire = stringRedisTemplate.expire(key, 1, TimeUnit.HOURS);
         return expire != null && expire;
+    }
+    @GetMapping("/activity/like/{id}")
+    @Transactional
+    public MessageDTO likeActivity(@PathVariable Integer id) {
+        String key = ACTIVITY_KEY_PREFIX + id;
+        var h = stringRedisTemplate.opsForHash();
+        Long userId = currentUserId();
+        if (userId == null) {
+            return new FailureDTO<>(Messages.BAD_REQUEST, id);
+        }
+        String ukey = "activity:liked:users:" + id;
+        Boolean liked = stringRedisTemplate.opsForSet().isMember(ukey, String.valueOf(userId));
+        if (Boolean.TRUE.equals(liked)) {
+            return new FailureDTO<>(Messages.BAD_REQUEST, id);
+        }
+        Object v = h.get(key, "countLikes");
+        String baseStr;
+        try { baseStr = String.valueOf(Long.parseLong(String.valueOf(v))); } catch (Exception e) {
+            Activities db = activitiesService.getById(id);
+            if (db == null) return new FailureDTO<>(Messages.NOT_FOUND, id);
+            baseStr = String.valueOf(db.getCountLikes() == null ? 0 : db.getCountLikes());
+        }
+        DefaultRedisScript<Long> script = new DefaultRedisScript<>();
+        script.setScriptText("local v=redis.call('HGET', KEYS[1], 'countLikes'); if redis.call('SISMEMBER', KEYS[2], ARGV[2])==1 then return -1 end; if not v or tonumber(v)==nil then redis.call('HSET', KEYS[1], 'countLikes', ARGV[1]) end; local new=redis.call('HINCRBY', KEYS[1], 'countLikes', 1); redis.call('EXPIRE', KEYS[1], ARGV[3]); redis.call('SADD', KEYS[2], ARGV[2]); redis.call('EXPIRE', KEYS[2], ARGV[4]); return new");
+        script.setResultType(Long.class);
+        Long res = stringRedisTemplate.execute(script, java.util.Arrays.asList(key, ukey), baseStr, String.valueOf(userId), String.valueOf(3600), String.valueOf(86400));
+        if (res == null) return new FailureDTO<>(Messages.SERVER_ERROR, id);
+        if (res == -1L) return new FailureDTO<>(Messages.BAD_REQUEST, id);
+        stringRedisTemplate.opsForSet().add(ACTIVITY_CHANGED_SET, String.valueOf(id));
+        return new SuccessDTO<>(res);
+    }
+
+    @GetMapping("/activity/unlike/{id}")
+    @Transactional
+    public MessageDTO unlikeActivity(@PathVariable Integer id) {
+        String key = ACTIVITY_KEY_PREFIX + id;
+        var h = stringRedisTemplate.opsForHash();
+        Long userId = currentUserId();
+        if (userId == null) {
+            return new FailureDTO<>(Messages.BAD_REQUEST, id);
+        }
+        String ukey = "activity:liked:users:" + id;
+        DefaultRedisScript<Long> script = new DefaultRedisScript<>();
+        script.setScriptText("if redis.call('SISMEMBER', KEYS[2], ARGV[1])==0 then return -2 end; local v=redis.call('HGET', KEYS[1], 'countLikes'); if not v or tonumber(v)==nil then redis.call('HSET', KEYS[1], 'countLikes', '0'); v='0' end; local nv=tonumber(v); if not nv or nv<=0 then redis.call('HSET', KEYS[1], 'countLikes', '0'); redis.call('SREM', KEYS[2], ARGV[1]); redis.call('EXPIRE', KEYS[1], ARGV[2]); redis.call('EXPIRE', KEYS[2], ARGV[3]); return 0 end; local new=redis.call('HINCRBY', KEYS[1], 'countLikes', -1); redis.call('SREM', KEYS[2], ARGV[1]); redis.call('EXPIRE', KEYS[1], ARGV[2]); redis.call('EXPIRE', KEYS[2], ARGV[3]); return new");
+        script.setResultType(Long.class);
+        Long res = stringRedisTemplate.execute(script, java.util.Arrays.asList(key, ukey), String.valueOf(userId), String.valueOf(3600), String.valueOf(86400));
+        if (res == null) return new FailureDTO<>(Messages.SERVER_ERROR, id);
+        if (res == -2L) return new FailureDTO<>(Messages.BAD_REQUEST, id);
+        stringRedisTemplate.opsForSet().add(ACTIVITY_CHANGED_SET, String.valueOf(id));
+        return new SuccessDTO<>(res);
+    }
+
+    private Long currentUserId() {
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        if (auth == null || auth.getName() == null) return null;
+        String username = auth.getName();
+        SysUser u = sysUserMapper.selectOne(new QueryWrapper<SysUser>().eq("username", username).eq("deleted", 0));
+        return u != null ? u.getId() : null;
     }
 }

@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.example.likes.mapper.CommentLikeMapper">
+
+    <resultMap id="BaseResultMap" type="com.example.likes.domain.CommentLike">
+        <id property="commentId" column="comment_id"/>
+        <id property="userId" column="user_id"/>
+        <result property="activityId" column="activity_id"/>
+        <result property="createdAt" column="created_at"/>
+    </resultMap>
+
+    <sql id="Base_Column_List">
+        comment_id, user_id, activity_id, created_at
+    </sql>
+
+    <insert id="insertIgnoreBatch">
+        INSERT INTO comment_like (comment_id, user_id, activity_id, created_at)
+        VALUES
+        <foreach collection="list" item="item" separator=",">
+            (#{item.commentId}, #{item.userId}, #{item.activityId}, #{item.createdAt})
+        </foreach>
+        ON DUPLICATE KEY UPDATE activity_id = VALUES(activity_id)
+    </insert>
+
+</mapper>

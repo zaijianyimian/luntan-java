@@ -6,7 +6,7 @@ import com.example.activity.service.ActivitiesService;
 import com.example.activity.mapper.ActivitiesMapper;
 import jakarta.annotation.Resource;
 import org.springframework.scheduling.annotation.Async;
-import org.springframework.data.redis.core.RedisTemplate;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 
 @Service
@@ -14,7 +14,7 @@ public class ActivitiesServiceImpl extends ServiceImpl<ActivitiesMapper, Activit
     implements ActivitiesService{
 
     @Resource
-    private RedisTemplate redisTemplate;
+    private StringRedisTemplate stringRedisTemplate;
 
     @Async
     @Override
@@ -22,7 +22,7 @@ public class ActivitiesServiceImpl extends ServiceImpl<ActivitiesMapper, Activit
         try {
             Thread.sleep(delayMillis);
         } catch (InterruptedException ignored) { }
-        redisTemplate.delete(key);
+        stringRedisTemplate.delete(key);
     }
 
     @Override

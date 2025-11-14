@@ -21,16 +21,13 @@ spring:
   jackson:
     deserialization:
       fail-on-unknown-properties: false
+  rabbitmq:
+    host: 123.56.138.127
+    port: 5672
+    username: ming
+    password: 123456
+    virtual-host: /
 logcat:
   api:
     key: ak_1Uk5ha1Tb3tI7iy3li4hS4Ek35G7l
-  task:
-    execution:
-      pool:
-        core-size: 8
-        max-size: 100
-        queue-capacity: 100
-        keep-alive-seconds: 60
-        wait-for-tasks-to-complete-on-shutdown: true
-        allow-core-thread-time-out: true
-        thread-name-prefix: task-executor-
+

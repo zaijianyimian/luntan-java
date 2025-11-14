@@ -16,6 +16,12 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.redis.core.HashOperations;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
+import com.example.filter.generator.mapper.SysUserMapper;
+import com.example.filter.generator.domain.SysUser;
+import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
+import org.springframework.data.redis.core.script.DefaultRedisScript;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -39,6 +45,9 @@ public class CommentController {
     /** 关键：使用 StringRedisTemplate，避免把 Hash 的值序列化成 JSON 导致 HINCRBY 报错 */
     @Resource
     private StringRedisTemplate stringRedisTemplate;
+
+    @Resource
+    private SysUserMapper sysUserMapper;
 
     // ----------------- 工具方法 -----------------
 
@@ -175,44 +184,26 @@ public class CommentController {
     public MessageDTO likeComment(@PathVariable Integer id) {
         String key = keyOf(id);
         HashOperations<String, Object, Object> h = stringRedisTemplate.opsForHash();
-
-        // 缓存有且是数字：直接 incr
-        Long like = readLikeFromRedis(key);
-        Comments base = null;
-        if (like == null) {
-            // 初始化缓存（优先 ES，失败回退 DB）
-            base = initRedisFromEsOrDb(id);
-            if (base == null) {
-                return new FailureDTO<>(Messages.NOT_FOUND, id);
-            }
+        Long userId = currentUserId();
+        if (userId == null) {
+            return new FailureDTO<>(Messages.BAD_REQUEST, id);
         }
-
-        // 兜底：保证字段是数字
-        if (readLikeFromRedis(key) == null) {
-            h.put(key, "countLikes", "0");
+        String ukey = "comment:liked:users:" + id;
+        Object v = h.get(key, "countLikes");
+        String baseStr;
+        try { baseStr = String.valueOf(Long.parseLong(String.valueOf(v))); } catch (Exception e) {
+            Comments base = initRedisFromEsOrDb(id);
+            if (base == null) return new FailureDTO<>(Messages.NOT_FOUND, id);
+            baseStr = String.valueOf(base.getCountLikes() == null ? 0L : base.getCountLikes());
         }
-
-        // HINCRBY +1
-        Long newLike = h.increment(key, "countLikes", 1L);
-        if (newLike == null) {
-            return new FailureDTO<>(Messages.SERVER_ERROR, id);
-        }
-        refreshTTL(key);
-
-        // 同步 DB
-        Comments toUpdate = new Comments();
-        toUpdate.setId(id);
-        toUpdate.setCountLikes(newLike);
-        commentsService.updateById(toUpdate);
-
-        // 同步 ES（upsert）
-        Comments toIndex = (base != null ? base : commentsService.getById(id));
-        if (toIndex != null) {
-            toIndex.setCountLikes(newLike);
-            commentsIndexService.indexAfterCommit(new CommentESSave(toIndex));
-        }
-
-        return new SuccessDTO<>(newLike);
+        DefaultRedisScript<Long> script = new DefaultRedisScript<>();
+        script.setScriptText("local v=redis.call('HGET', KEYS[1], 'countLikes'); if redis.call('SISMEMBER', KEYS[2], ARGV[2])==1 then return -1 end; if not v or tonumber(v)==nil then redis.call('HSET', KEYS[1], 'countLikes', ARGV[1]) end; local new=redis.call('HINCRBY', KEYS[1], 'countLikes', 1); redis.call('EXPIRE', KEYS[1], ARGV[3]); redis.call('SADD', KEYS[2], ARGV[2]); redis.call('EXPIRE', KEYS[2], ARGV[4]); return new");
+        script.setResultType(Long.class);
+        Long res = stringRedisTemplate.execute(script, java.util.Arrays.asList(key, ukey), baseStr, String.valueOf(userId), String.valueOf(600), String.valueOf(86400));
+        if (res == null) return new FailureDTO<>(Messages.SERVER_ERROR, id);
+        if (res == -1L) return new FailureDTO<>(Messages.BAD_REQUEST, id);
+        stringRedisTemplate.opsForSet().add("changed:comments", String.valueOf(id));
+        return new SuccessDTO<>(res);
     }
 
     // ----------------- 5) 取消点赞：同点赞，但 HINCRBY -1（不小于 0） -----------------
@@ -222,63 +213,27 @@ public class CommentController {
     public MessageDTO unlikeComment(@PathVariable Integer id) {
         String key = keyOf(id);
         HashOperations<String, Object, Object> h = stringRedisTemplate.opsForHash();
-
-        // 缓存缺失则初始化（优先 ES，失败回退 DB）
-        Long like = readLikeFromRedis(key);
-        Comments base = null;
-        if (like == null) {
-            base = initRedisFromEsOrDb(id);
-            if (base == null) {
-                return new FailureDTO<>(Messages.NOT_FOUND, id);
-            }
-            like = readLikeFromRedis(key);
-            if (like == null) like = 0L;
+        Long userId = currentUserId();
+        if (userId == null) {
+            return new FailureDTO<>(Messages.BAD_REQUEST, id);
         }
+        String ukey = "comment:liked:users:" + id;
+        DefaultRedisScript<Long> script = new DefaultRedisScript<>();
+        script.setScriptText("if redis.call('SISMEMBER', KEYS[2], ARGV[1])==0 then return -2 end; local v=redis.call('HGET', KEYS[1], 'countLikes'); if not v or tonumber(v)==nil then redis.call('HSET', KEYS[1], 'countLikes', '0'); v='0' end; local nv=tonumber(v); if not nv or nv<=0 then redis.call('HSET', KEYS[1], 'countLikes', '0'); redis.call('SREM', KEYS[2], ARGV[1]); redis.call('EXPIRE', KEYS[1], ARGV[2]); redis.call('EXPIRE', KEYS[2], ARGV[3]); return 0 end; local new=redis.call('HINCRBY', KEYS[1], 'countLikes', -1); redis.call('SREM', KEYS[2], ARGV[1]); redis.call('EXPIRE', KEYS[1], ARGV[2]); redis.call('EXPIRE', KEYS[2], ARGV[3]); return new");
+        script.setResultType(Long.class);
+        Long res = stringRedisTemplate.execute(script, java.util.Arrays.asList(key, ukey), String.valueOf(userId), String.valueOf(600), String.valueOf(86400));
+        if (res == null) return new FailureDTO<>(Messages.SERVER_ERROR, id);
+        if (res == -2L) return new FailureDTO<>(Messages.BAD_REQUEST, id);
+        stringRedisTemplate.opsForSet().add("changed:comments", String.valueOf(id));
+        return new SuccessDTO<>(res);
+    }
 
-        // 不让变成负数
-        if (like <= 0) {
-            h.put(key, "countLikes", "0");
-            refreshTTL(key);
-
-            // 同步 DB & ES（0）
-            Comments toZero = new Comments();
-            toZero.setId(id);
-            toZero.setCountLikes(0L);
-            commentsService.updateById(toZero);
-
-            Comments toIndex = (base != null ? base : commentsService.getById(id));
-            if (toIndex != null) {
-                toIndex.setCountLikes(0L);
-                commentsIndexService.indexAfterCommit(new CommentESSave(toIndex));
-            }
-            return new SuccessDTO<>(0L);
-        }
-
-        // HINCRBY -1
-        Long newLike = h.increment(key, "countLikes", -1L);
-        if (newLike == null) {
-            return new FailureDTO<>(Messages.SERVER_ERROR, id);
-        }
-        if (newLike < 0) { // 并发极端兜底
-            h.put(key, "countLikes", "0");
-            newLike = 0L;
-        }
-        refreshTTL(key);
-
-        // 同步 DB
-        Comments toUpdate = new Comments();
-        toUpdate.setId(id);
-        toUpdate.setCountLikes(newLike);
-        commentsService.updateById(toUpdate);
-
-        // 同步 ES（upsert）
-        Comments toIndex = (base != null ? base : commentsService.getById(id));
-        if (toIndex != null) {
-            toIndex.setCountLikes(newLike);
-            commentsIndexService.indexAfterCommit(new CommentESSave(toIndex));
-        }
-
-        return new SuccessDTO<>(newLike);
+    private Long currentUserId() {
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        if (auth == null || auth.getName() == null) return null;
+        String username = auth.getName();
+        SysUser u = sysUserMapper.selectOne(new QueryWrapper<SysUser>().eq("username", username).eq("deleted", 0));
+        return u != null ? u.getId() : null;
     }
 
     // ----------------- 4) 根据 activityId 获取（保持不变） -----------------

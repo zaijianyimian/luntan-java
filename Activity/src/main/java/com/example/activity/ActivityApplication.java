@@ -6,12 +6,16 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.cloud.openfeign.EnableFeignClients;
 import org.springframework.context.annotation.ComponentScan;
 import org.springframework.scheduling.annotation.EnableAsync;
+import org.springframework.scheduling.annotation.EnableScheduling;
+import org.springframework.amqp.rabbit.annotation.EnableRabbit;
 import org.springframework.data.elasticsearch.repository.config.EnableElasticsearchRepositories;
 
 @SpringBootApplication
 @ComponentScan(basePackages = {"com.example.activity", "com.example.filter"})
 @MapperScan(basePackages = {"com.example.filter.generator.mapper","com.example.activity.mapper"})
 @EnableAsync
+@EnableScheduling
+@EnableRabbit
 @EnableElasticsearchRepositories(basePackages = "com.example.activity.es")
 @EnableFeignClients("com.example.activity.feign")
 public class ActivityApplication {

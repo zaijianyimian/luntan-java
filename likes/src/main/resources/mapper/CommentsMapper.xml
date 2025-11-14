@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.example.likes.mapper.CommentsMapper">
+
+    <resultMap id="BaseResultMap" type="com.example.likes.domain.Comments">
+            <id property="id" column="id" />
+            <result property="userId" column="user_id" />
+            <result property="activityId" column="activity_id" />
+            <result property="description" column="description" />
+            <result property="countLikes" column="count_likes" />
+    </resultMap>
+
+    <sql id="Base_Column_List">
+        id,user_id,activity_id,description,count_likes
+    </sql>
+</mapper>

@@ -1,7 +1,7 @@
 spring:
   config:
     import:
-      - optional:nacos:nacos-logreg-dev.yaml  # 修正为 .yml，与 Nacos 和 file-extension 匹配
+      - optional:nacos:nacos-logreg-dev.yaml
   application:
     name: usermanagement  # 建议小写一致
   cloud:

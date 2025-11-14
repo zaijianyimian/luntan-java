@@ -3,6 +3,7 @@ autoDetectedPackages:
 - com.example.activity
 - com.example.filter
 - com.example.gateway
+- com.example.likes
 - com.example.logreg
 autoKeepDataNum: 10
 enableAutoDetect: true

@@ -5,10 +5,7 @@ import com.example.activity.feign.ServiceFeign;
 import com.example.activity.message.Messages;
 import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.web.bind.annotation.*;
-
-import static org.apache.naming.SelectorContext.prefix;
 
 @RestController
 @RequestMapping("/api")

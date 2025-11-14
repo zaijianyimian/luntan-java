@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.example.likes.mapper.CommentCountLikeMapper">
+
+    <resultMap id="BaseResultMap" type="com.example.likes.domain.CommentCountLike">
+        <id property="commentId" column="comment_id"/>
+        <result property="activityId" column="activity_id"/>
+        <result property="countLikes" column="count_likes"/>
+        <result property="updatedAt" column="updated_at"/>
+    </resultMap>
+
+    <sql id="Base_Column_List">
+        comment_id, activity_id, count_likes, updated_at
+    </sql>
+
+    <insert id="upsertBatch">
+        INSERT INTO comment_count_like (comment_id, activity_id, count_likes, updated_at)
+        VALUES
+        <foreach collection="list" item="item" separator=",">
+            (#{item.commentId}, #{item.activityId}, #{item.countLikes}, NOW())
+        </foreach>
+        ON DUPLICATE KEY UPDATE
+        activity_id = VALUES(activity_id),
+        count_likes = VALUES(count_likes),
+        updated_at = VALUES(updated_at)
+    </insert>
+
+</mapper>
