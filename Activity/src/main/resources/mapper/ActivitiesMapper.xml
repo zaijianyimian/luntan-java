@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.example.activity.mapper.ActivitiesMapper">
+
+    <resultMap id="BaseResultMap" type="com.example.activity.domain.Activities">
+            <id property="id" column="id" />
+            <result property="authorId" column="author_id" />
+            <result property="title" column="title" />
+            <result property="description" column="description" />
+            <result property="categoryId" column="category_id" />
+            <result property="countLikes" column="count_likes" />
+            <result property="countComments" column="count_comments" />
+            <result property="countViews" column="count_views" />
+            <result property="tags" column="tags" />
+            <result property="time" column="time" />
+            <result property="countFavorite" column="count_favorite" />
+            <result property="latitude" column="latitude" />
+            <result property="longitude" column="longitude" />
+        <result property="location" column="location" typeHandler="com.example.activity.typehandler.LocationTypeHandler"/>
+        <result property="isTop" column="is_top" />
+            <result property="topTime" column="top_time" />
+            <result property="authorImage" column="author_image" />
+            <result property="countPhotos" column="count_photos" />
+    </resultMap>
+
+    <sql id="Base_Column_List">
+        id,author_id,title,description,category_id,count_likes,
+        count_comments,count_views,tags,status,time,
+        count_favorite,latitude,longitude,location,is_top,
+        top_time,author_nickname,author_image,count_photos
+    </sql>
+</mapper>

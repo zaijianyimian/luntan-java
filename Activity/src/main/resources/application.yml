@@ -1,0 +1,36 @@
+spring:
+  application:
+    name: Activity-Management
+  datasource:
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    url: jdbc:mysql://localhost:3306/activity?serverTimezone=Asia/Shanghai&useUnicode=true&characterEncoding=utf-8&allowMultiQueries=true&useSSL=false&allowPublicKeyRetrieval=true
+    username: root
+    password: 126824
+  data:
+    redis:
+      host: 123.56.138.127
+      port: 6379
+      password: 123456
+      timeout: 10000
+      database: 0
+      username: ming
+  elasticsearch:
+    uris: 123.56.138.127:9200
+    username: ming
+    password: 123456
+  jackson:
+    deserialization:
+      fail-on-unknown-properties: false
+logcat:
+  api:
+    key: ak_1Uk5ha1Tb3tI7iy3li4hS4Ek35G7l
+  task:
+    execution:
+      pool:
+        core-size: 8
+        max-size: 100
+        queue-capacity: 100
+        keep-alive-seconds: 60
+        wait-for-tasks-to-complete-on-shutdown: true
+        allow-core-thread-time-out: true
+        thread-name-prefix: task-executor-

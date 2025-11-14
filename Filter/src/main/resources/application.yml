@@ -1,0 +1,29 @@
+
+spring:
+  application:
+    name: Filter-Management
+  datasource:
+    druid:
+      driver-class-name: com.mysql.cj.jdbc.Driver
+      url: jdbc:mysql://localhost:3306/luntan?useUnicode=true&characterEncoding=utf8&useSSL=false&serverTimezone=Asia/Shanghai&connectTimeout=3000&socketTimeout=6000
+      username: root
+      password: 126824
+      initial-size: 5
+      min-idle: 5
+      max-active: 20
+      max-wait: 6000
+    username: root
+    password: 126824
+    url: jdbc:mysql://localhost:3306/luntan?useUnicode=true&characterEncoding=utf8&useSSL=false&serverTimezone=Asia/Shanghai&connectTimeout=3000&socketTimeout=6000
+    driver-class-name: com.mysql.cj.jdbc.Driver
+  cloud:
+    nacos:
+      server-addr: 123.56.138.127:8848
+      discovery:
+        username: nacos
+        password: VxykvMqce3
+knife4j:
+  enable: true
+  path: /doc.html
+server:
+  port: 9999

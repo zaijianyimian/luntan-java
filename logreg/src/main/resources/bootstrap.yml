@@ -1,0 +1,27 @@
+spring:
+  config:
+    import:
+      - optional:nacos:nacos-logreg-dev.yaml  # 修正为 .yml，与 Nacos 和 file-extension 匹配
+  application:
+    name: usermanagement  # 建议小写一致
+  cloud:
+    nacos:
+      server-addr: 123.56.138.127:8848
+      config:
+        username: nacos  # 添加认证
+        password: VxykvMqce3  # 添加认证
+        namespace: dca3eff9-91d7-4566-ab1d-0ed9958ec9fa
+        group: DEFAULT_GROUP
+        prefix: nacos-logreg
+        file-extension: yaml
+        import-check:
+          enabled: false  # 尝试禁用检查
+      discovery:
+        username: nacos
+        password: VxykvMqce3
+  profiles:
+    active: dev  # 可移到启动参数 -Dspring.profiles.active=dev
+  mail:
+    username: mingtops@163.com
+    password: EPjGi3BEMQNFtxqu
+    host: smtp.163.com

@@ -1,0 +1,23 @@
+spring:
+  application:
+    name: gateway
+  cloud:
+    nacos:
+      discovery:
+        server-addr: 123.56.138.127:8848
+        namespace: public
+        group: DEFAULT_GROUP
+        username: nacos
+        password: VxykvMqce3
+    gateway:
+      routes:
+        - id: user
+          uri: lb://User-Management
+          predicates:
+            - Path=/api/user/**
+        - id: activity
+          uri: lb://Activity-Management
+          predicates:
+            - Path=/api/activity/**
+server:
+  port: 3000
