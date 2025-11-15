@@ -21,15 +21,34 @@ public class LikeBatchPublisher {
         this.rabbitTemplate = rabbitTemplate;
     }
 
-    @Scheduled(fixedDelay = 30000)
+    private static final String LAST_COMMENTS_TS_KEY = "publish:last:comments";
+    private static final String LAST_ACTIVITIES_TS_KEY = "publish:last:activities";
+    private static final long WINDOW_MS = 30_000L;
+    private static final long BATCH_THRESHOLD = 1000L;
+    private static final int BATCH_LIMIT = 1000;
+
+    @Scheduled(fixedDelay = 30000, initialDelay = 30000)
     public void publish() throws Exception {
         publishComments();
         publishActivities();
     }
 
     private void publishComments() throws Exception {
-        Set<String> ids = stringRedisTemplate.opsForSet().members("changed:comments");
-        if (ids == null || ids.isEmpty()) return;
+        Long size = stringRedisTemplate.opsForSet().size("changed:comments");
+        long now = System.currentTimeMillis();
+        Long last = null;
+        try {
+            String s = stringRedisTemplate.opsForValue().get(LAST_COMMENTS_TS_KEY);
+            if (s != null) last = Long.parseLong(s);
+        } catch (Exception ignore) {}
+        boolean thresholdHit = size != null && size >= BATCH_THRESHOLD;
+        boolean windowHit = last == null || now - last >= WINDOW_MS;
+        if (!(thresholdHit || windowHit)) return;
+
+        Set<String> all = stringRedisTemplate.opsForSet().members("changed:comments");
+        if (all == null || all.isEmpty()) return;
+        java.util.List<String> ids = new java.util.ArrayList<>(all);
+        if (ids.size() > BATCH_LIMIT) ids = ids.subList(0, BATCH_LIMIT);
         HashOperations<String, Object, Object> h = stringRedisTemplate.opsForHash();
         List<Map<String, Object>> items = new ArrayList<>();
         for (String sid : ids) {
@@ -56,11 +75,25 @@ public class LikeBatchPublisher {
         String json = mapper.writeValueAsString(payload);
         rabbitTemplate.convertAndSend("luntanexchange", "comment", json);
         stringRedisTemplate.opsForSet().remove("changed:comments", ids.toArray());
+        stringRedisTemplate.opsForValue().set(LAST_COMMENTS_TS_KEY, String.valueOf(now));
     }
 
     private void publishActivities() throws Exception {
-        Set<String> ids = stringRedisTemplate.opsForSet().members("changed:activities");
-        if (ids == null || ids.isEmpty()) return;
+        Long size = stringRedisTemplate.opsForSet().size("changed:activities");
+        long now = System.currentTimeMillis();
+        Long last = null;
+        try {
+            String s = stringRedisTemplate.opsForValue().get(LAST_ACTIVITIES_TS_KEY);
+            if (s != null) last = Long.parseLong(s);
+        } catch (Exception ignore) {}
+        boolean thresholdHit = size != null && size >= BATCH_THRESHOLD;
+        boolean windowHit = last == null || now - last >= WINDOW_MS;
+        if (!(thresholdHit || windowHit)) return;
+
+        Set<String> all = stringRedisTemplate.opsForSet().members("changed:activities");
+        if (all == null || all.isEmpty()) return;
+        java.util.List<String> ids = new java.util.ArrayList<>(all);
+        if (ids.size() > BATCH_LIMIT) ids = ids.subList(0, BATCH_LIMIT);
         HashOperations<String, Object, Object> h = stringRedisTemplate.opsForHash();
         List<Map<String, Object>> items = new ArrayList<>();
         for (String sid : ids) {
@@ -81,5 +114,6 @@ public class LikeBatchPublisher {
         String json = mapper.writeValueAsString(payload);
         rabbitTemplate.convertAndSend("luntanexchange", "activity", json);
         stringRedisTemplate.opsForSet().remove("changed:activities", ids.toArray());
+        stringRedisTemplate.opsForValue().set(LAST_ACTIVITIES_TS_KEY, String.valueOf(now));
     }
 }

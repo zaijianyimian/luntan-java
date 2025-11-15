@@ -34,14 +34,28 @@ public class ActivityIndexService {
     @Resource
     private AsyncElasticsearchService asyncElasticsearchService;
 
-    @Transactional
+    // 在事务提交后再触发 ES 索引，避免未提交数据被索引
     public void indexAfterCommit(ActivityESSave activities) {
-        asyncElasticsearchService.indexAsync(activities);
+        org.springframework.transaction.support.TransactionSynchronizationManager.registerSynchronization(
+                new org.springframework.transaction.support.TransactionSynchronization() {
+                    @Override
+                    public void afterCommit() {
+                        asyncElasticsearchService.indexAsync(activities);
+                    }
+                }
+        );
     }
 
-    @Transactional
+    // 在事务提交后再触发 ES 删除，保证索引与数据库一致
     public void deleteAfterCommit(Integer id) {
-        asyncElasticsearchService.deleteAsync(id);
+        org.springframework.transaction.support.TransactionSynchronizationManager.registerSynchronization(
+                new org.springframework.transaction.support.TransactionSynchronization() {
+                    @Override
+                    public void afterCommit() {
+                        asyncElasticsearchService.deleteAsync(id);
+                    }
+                }
+        );
     }
 
     public List<ActivityESSave> searchByKeyword(String keyword) {

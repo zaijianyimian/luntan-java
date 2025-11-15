@@ -41,3 +41,10 @@ jwt:
     username: mingtops@163.com
     password: EPjGi3BEMQNFtxqu
     host: smtp.163.com
+
+storage:
+  endpoint: ${STORAGE_ENDPOINT:http://123.56.138.127:9000}
+  accessKey: ${STORAGE_ACCESS_KEY:}
+  secretKey: ${STORAGE_SECRET_KEY:}
+  bucket: ${STORAGE_BUCKET:avatars}
+  region: ${STORAGE_REGION:us-east-1}

@@ -31,4 +31,24 @@
         count_favorite,latitude,longitude,location,is_top,
         top_time,author_nickname,author_image,count_photos
     </sql>
+
+    <!-- 范围查询：使用 Haversine 公式计算两点球面距离（单位：米） -->
+    <select id="findNearby" resultMap="BaseResultMap">
+        SELECT
+        <include refid="Base_Column_List"/>
+        FROM activities
+        WHERE latitude IS NOT NULL AND longitude IS NOT NULL
+          AND (
+            6371000 * acos(
+              cos(radians(#{latitude})) * cos(radians(latitude)) * cos(radians(longitude) - radians(#{longitude}))
+              + sin(radians(#{latitude})) * sin(radians(latitude))
+            )
+          ) &lt;= #{radiusMeters}
+        ORDER BY
+          6371000 * acos(
+            cos(radians(#{latitude})) * cos(radians(latitude)) * cos(radians(longitude) - radians(#{longitude}))
+            + sin(radians(#{latitude})) * sin(radians(latitude))
+          ) ASC
+        LIMIT #{limit}
+    </select>
 </mapper>

@@ -38,40 +38,43 @@ public class LikeBatchFlusher {
 
     @Scheduled(fixedDelay = 30000)
     public void flush() {
-        if (!consumer.getCommentAgg().isEmpty()) {
-            List<CommentCountLike> comments = new ArrayList<>(consumer.getCommentAgg().values());
+        // 原子交换快照，避免与消费者并发写入产生竞态
+        var commentSnapshot = consumer.swapCommentAgg();
+        if (!commentSnapshot.isEmpty()) {
+            List<CommentCountLike> comments = new ArrayList<>(commentSnapshot.values());
             commentService.upsertBatch(comments);
-            if (!consumer.getCommentLikeAgg().isEmpty()) {
-                List<com.example.likes.domain.CommentLike> likes = new ArrayList<>(consumer.getCommentLikeAgg().values());
+            var likeSnapshot = consumer.swapCommentLikeAgg();
+            if (!likeSnapshot.isEmpty()) {
+                List<com.example.likes.domain.CommentLike> likes = new ArrayList<>(likeSnapshot.values());
                 commentLikeService.insertIgnoreBatch(likes);
-                consumer.getCommentLikeAgg().clear();
             }
             List<UpdateQuery> queries = new ArrayList<>();
             for (CommentCountLike c : comments) {
                 Document doc = Document.create();
-                doc.put("comment-all", c.getCountLikes());
+                // 修正字段名为 countLikes
+                doc.put("countLikes", c.getCountLikes());
                 UpdateQuery uq = UpdateQuery.builder(String.valueOf(c.getCommentId()))
                         .withDocument(doc).build();
                 queries.add(uq);
             }
             esOps.bulkUpdate(queries, IndexCoordinates.of("comments-all"));
-            consumer.getCommentAgg().clear();
         }
 
-        if (!consumer.getActivityAgg().isEmpty()) {
-            List<ActivityCountLike> activities = new ArrayList<>(consumer.getActivityAgg().values());
+        var activitySnapshot = consumer.swapActivityAgg();
+        if (!activitySnapshot.isEmpty()) {
+            List<ActivityCountLike> activities = new ArrayList<>(activitySnapshot.values());
             // 若需要 UPSERT，可为 ActivityCountLike 增加 Mapper upsertBatch；这里用 saveOrUpdateBatch 简化
             activityService.saveOrUpdateBatch(activities);
             List<UpdateQuery> queries = new ArrayList<>();
             for (ActivityCountLike a : activities) {
                 Document doc = Document.create();
-                doc.put("comment-all", a.getCountLikes());
+                // 修正字段名为 countLikes
+                doc.put("countLikes", a.getCountLikes());
                 UpdateQuery uq = UpdateQuery.builder(String.valueOf(a.getActivityId()))
                         .withDocument(doc).build();
                 queries.add(uq);
             }
             esOps.bulkUpdate(queries, IndexCoordinates.of("activity-all"));
-            consumer.getActivityAgg().clear();
         }
     }
 }

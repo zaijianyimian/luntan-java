@@ -1,6 +1,5 @@
 package com.example.activity.controller;
 
-import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.example.activity.domain.Activities;
@@ -30,7 +29,6 @@ import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
-import org.springframework.data.redis.core.HashOperations;
 
 import java.math.BigDecimal;
 import java.util.*;
@@ -58,9 +56,12 @@ public class ActivityController {
     private ActivityIndexService activityIndexService;
 
     @Resource
+    private com.example.activity.service.RankingService rankingService;
+
+    @Resource
     private RedissonClient redissonClient;
 
-    private final ObjectMapper objectMapper = new ObjectMapper();
+    
 
     private static final String ACTIVITY_KEY_PREFIX = "activity:";
     private static final String ACTIVITY_CHANGED_SET = "changed:activities";
@@ -82,41 +83,37 @@ public class ActivityController {
     }
 
     @PostMapping("/activity")
-    @Transactional
     public MessageDTO addActivity(@RequestBody ActivityVO activity) throws JsonProcessingException {
         if (activity == null) {
             return new FailureDTO<>(Messages.BAD_REQUEST, null);
         }
 
         Activities activities = new Activities(activity);
+        Long userId = currentUserId();
+        if (userId == null) {
+            return new FailureDTO<>(Messages.BAD_REQUEST, "未认证或令牌无效");
+        }
+        activities.setAuthorId(userId);
         activities.setTime(new Date());
         activities.setCountLikes(0);
         activities.setCountComments(0);
         activities.setCountViews(0);
         activities.setCountFavorite(0);
-        boolean saved = activitiesService.save(activities);
+        // 使用服务层事务统一保存并可选更新几何位置
+        Activities savedEntity = activitiesService.saveActivityAndUpdateGeo(activities);
         Map<String, Object> map = new HashMap<>();
         map.put("id", activities.getId());
 
-        if (!saved) {
+        if (savedEntity == null) {
             return new FailureDTO<>(Messages.BAD_REQUEST, map);
         }
         // 添加到布隆过滤器
         bloomFilter.add(activities.getId().toString());
 
-        // 新增：保存后更新 geometry 列（POINT，SRID 4326）
-        if (activities.getLongitude() != null && activities.getLatitude() != null) {
-            activitiesService.updateGeoLocation(
-                    activities.getId(),
-                    BigDecimal.valueOf(activities.getLongitude()),
-                    BigDecimal.valueOf(activities.getLatitude())
-            );
-        }
-
         boolean b = this.saveActivityHash(activities);// 保存到Redis缓存
 
         activityIndexService.indexAfterCommit(new ActivityESSave(activities));// 添加到ES
-        if (b && saved)
+        if (b && savedEntity != null)
             return new SuccessDTO<>(map);
         return new FailureDTO<>(Messages.INTERNAL_SERVER_ERROR, null);
     }
@@ -175,16 +172,50 @@ public class ActivityController {
 
         // 进入数据库查询的逻辑
         RLock lock = redissonClient.getLock("activity_lock:" + id); // 创建锁，确保同一时间只有一个线程访问数据库
-        boolean isLocked = false;
         try {
-            // 加锁，防止多个线程同时查询数据库
-            isLocked = lock.tryLock(10, 30, TimeUnit.SECONDS);
-            if (!isLocked) {
-                log.warn("获取锁超时，key={}", key);
-                return new FailureDTO<>(Messages.INTERNAL_SERVER_ERROR, "系统繁忙，请稍后再试");
+            // 响应中断的加锁方式，避免线程无法及时退出
+            lock.lockInterruptibly();
+
+            // 加锁后做二次检查（双检），避免并发下重复回源
+            Map<Object, Object> cachedAfterLock = stringRedisTemplate.opsForHash().entries(key);
+            if (cachedAfterLock != null && !cachedAfterLock.isEmpty()) {
+                try {
+                    Activities cachedActivity = new Activities();
+                    String sId = (String) cachedAfterLock.get("id");
+                    if (sId != null) cachedActivity.setId(Integer.parseInt(sId));
+                    cachedActivity.setTitle((String) cachedAfterLock.get("title"));
+                    cachedActivity.setDescription((String) cachedAfterLock.get("description"));
+                    String sLikes = (String) cachedAfterLock.get("countLikes");
+                    if (sLikes != null) cachedActivity.setCountLikes(Integer.parseInt(sLikes));
+                    String sComments = (String) cachedAfterLock.get("countComments");
+                    if (sComments != null) cachedActivity.setCountComments(Integer.parseInt(sComments));
+                    String sViews = (String) cachedAfterLock.get("countViews");
+                    if (sViews != null) cachedActivity.setCountViews(Integer.parseInt(sViews));
+                    String sFav = (String) cachedAfterLock.get("countFavorite");
+                    if (sFav != null) cachedActivity.setCountFavorite(Integer.parseInt(sFav));
+                    String sLat = (String) cachedAfterLock.get("latitude");
+                    if (sLat != null) cachedActivity.setLatitude(Double.parseDouble(sLat));
+                    String sLng = (String) cachedAfterLock.get("longitude");
+                    if (sLng != null) cachedActivity.setLongitude(Double.parseDouble(sLng));
+                    String sTime = (String) cachedAfterLock.get("time");
+                    if (sTime != null) {
+                        try { cachedActivity.setTime(new java.util.Date(java.time.Instant.parse(sTime).toEpochMilli())); } catch (Exception ignore) {}
+                    }
+                    cachedActivity.setTags((String) cachedAfterLock.get("tags"));
+                    String sTop = (String) cachedAfterLock.get("isTop");
+                    if (sTop != null) cachedActivity.setIsTop(Integer.parseInt(sTop));
+                    String sTopTime = (String) cachedAfterLock.get("topTime");
+                    if (sTopTime != null) {
+                        try { cachedActivity.setTopTime(new java.util.Date(java.time.Instant.parse(sTopTime).toEpochMilli())); } catch (Exception ignore) {}
+                    }
+                    cachedActivity.setAuthorImage((String) cachedAfterLock.get("authorImage"));
+                    String sPhotos = (String) cachedAfterLock.get("countPhotos");
+                    if (sPhotos != null) cachedActivity.setCountPhotos(Integer.parseInt(sPhotos));
+                    return new SuccessDTO<>(cachedActivity);
+                } catch (Exception ignore) {}
             }
 
-            // 如果缓存未命中，从数据库查询
+            // 如果缓存仍未命中，从数据库查询
             Activities activity = activitiesService.getById(id);
             if (activity == null) {
                 return new FailureDTO<>(Messages.NOT_FOUND, null);
@@ -200,14 +231,17 @@ public class ActivityController {
                 return new FailureDTO<>(Messages.INTERNAL_SERVER_ERROR, null);
             }
         } catch (InterruptedException e) {
-            log.error("获取锁中断，key={}", key, e);
+            // 恢复中断标记并返回友好提示
+            log.warn("获取锁被中断，key={}", key, e);
             Thread.currentThread().interrupt();
             return new FailureDTO<>(Messages.INTERNAL_SERVER_ERROR, "系统繁忙，请稍后再试");
         } finally {
-            // 解锁，释放锁
-            if (isLocked) {
-                lock.unlock();
-            }
+            // 仅在当前线程持有锁时释放
+            try {
+                if (lock.isHeldByCurrentThread()) {
+                    lock.unlock();
+                }
+            } catch (Exception ignore) {}
         }
     }
 
@@ -230,7 +264,6 @@ public class ActivityController {
      * 删除活动，先查布隆过滤器，命中则删除缓存，否则返回404，删除成功则删除ES缓存，删除成功则删除Redis缓存，删除成功则返回成功
      */
     @DeleteMapping("/activity/{id}")
-    @Transactional
     public MessageDTO deleteActivity(@PathVariable Integer id) {
         boolean exists = bloomFilter.contains(id.toString());
         if (!exists) {
@@ -238,12 +271,13 @@ public class ActivityController {
         }
         stringRedisTemplate.delete(ACTIVITY_KEY_PREFIX + id);
 
-        boolean removed = activitiesService.removeById(id);// 删除MySQL缓存
+        boolean removed = activitiesService.removeById(id);// 删除MySQL数据
         if (!removed) {
             return new FailureDTO<>(Messages.NOT_FOUND, id);
         }
 
-        activityIndexService.deleteAfterCommit(id);// 删除ES缓存
+        activityIndexService.deleteAfterCommit(id);// 事务提交后删除 ES 索引
+        rankingService.removeActivity(id);// 删除当日榜单中的条目
         activitiesService.delayedCacheDelete(ACTIVITY_KEY_PREFIX + id, 300L);
 
         return new SuccessDTO<>(id);
@@ -328,9 +362,12 @@ public class ActivityController {
         return p;
     }
 
+    /**
+     *
+     * 将activity存储为redishash结构
+     */
     private boolean saveActivityHash(Activities activities) {
         String key = ACTIVITY_KEY_PREFIX + activities.getId();
-        // 在 saveActivityHash 方法中，确保所有值都是 String 类型
         Map<String, String> hashData = new HashMap<>();
         hashData.put("id", String.valueOf(activities.getId()));
         hashData.put("authorId", String.valueOf(activities.getAuthorId()));
@@ -361,7 +398,6 @@ public class ActivityController {
         return expire != null && expire;
     }
     @GetMapping("/activity/like/{id}")
-    @Transactional
     public MessageDTO likeActivity(@PathVariable Integer id) {
         String key = ACTIVITY_KEY_PREFIX + id;
         var h = stringRedisTemplate.opsForHash();
@@ -388,14 +424,14 @@ public class ActivityController {
         if (res == null) return new FailureDTO<>(Messages.SERVER_ERROR, id);
         if (res == -1L) return new FailureDTO<>(Messages.BAD_REQUEST, id);
         stringRedisTemplate.opsForSet().add(ACTIVITY_CHANGED_SET, String.valueOf(id));
+        rankingService.incLikeScore(id);
         return new SuccessDTO<>(res);
     }
 
     @GetMapping("/activity/unlike/{id}")
-    @Transactional
     public MessageDTO unlikeActivity(@PathVariable Integer id) {
         String key = ACTIVITY_KEY_PREFIX + id;
-        var h = stringRedisTemplate.opsForHash();
+        
         Long userId = currentUserId();
         if (userId == null) {
             return new FailureDTO<>(Messages.BAD_REQUEST, id);
@@ -417,5 +453,25 @@ public class ActivityController {
         String username = auth.getName();
         SysUser u = sysUserMapper.selectOne(new QueryWrapper<SysUser>().eq("username", username).eq("deleted", 0));
         return u != null ? u.getId() : null;
+    }
+    /**
+     * 范围查询：查找附近指定半径（默认10公里）内的活动
+     */
+    @GetMapping("/activities/nearby")
+    public MessageDTO findNearby(@RequestParam Double latitude,
+                                 @RequestParam Double longitude,
+                                 @RequestParam(defaultValue = "10") Integer radiusKm,
+                                 @RequestParam(defaultValue = "50") Integer limit) {
+        if (latitude == null || longitude == null) {
+            return new FailureDTO<>(Messages.BAD_REQUEST, "latitude/longitude 不能为空");
+        }
+        int meters = Math.max(1, radiusKm) * 1000;
+        var list = activitiesService.findNearby(longitude, latitude, meters, Math.max(1, limit));
+        return new SuccessDTO<>(list == null ? java.util.Collections.emptyList() : list);
+    }
+    @GetMapping("/activities/rank/top")
+    public MessageDTO topRank(@RequestParam(defaultValue = "10") Integer n) {
+        var list = rankingService.topN(Math.max(1, Math.min(50, n)));
+        return new SuccessDTO<>(list);
     }
 }

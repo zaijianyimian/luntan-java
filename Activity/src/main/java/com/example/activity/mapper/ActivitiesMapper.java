@@ -18,6 +18,15 @@ public interface ActivitiesMapper extends BaseMapper<Activities> {
     int updateLocationPoint(@Param("id") Integer id,
                             @Param("longitude") java.math.BigDecimal longitude,
                             @Param("latitude") java.math.BigDecimal latitude);
+
+    /**
+     * 使用 Haversine 公式进行范围查询，返回指定半径内的活动列表（按距离升序，限制条数）
+     */
+    java.util.List<Activities> findNearby(
+            @Param("longitude") double longitude,
+            @Param("latitude") double latitude,
+            @Param("radiusMeters") int radiusMeters,
+            @Param("limit") int limit);
 }
 
 

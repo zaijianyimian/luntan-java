@@ -10,6 +10,7 @@ import com.maxmind.geoip2.record.Country;
 import com.maxmind.geoip2.record.Location;
 import com.maxmind.geoip2.record.Subdivision;
 import jakarta.annotation.PostConstruct;
+import org.springframework.beans.factory.annotation.Value;
 import jakarta.annotation.Resource;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.stereotype.Service;
@@ -31,11 +32,23 @@ public class IpLocationsServiceImpl extends ServiceImpl<IpLocationsMapper, IpLoc
     @Resource
     private IpLocationsMapper ipLocationsMapper;
     private DatabaseReader databaseReader;
+    @Value("${geoip.mmdb.path:}")
+    private String mmdbPath;
 
     // 在应用启动时加载 GeoLite2 数据库
     @PostConstruct
     public void init() throws IOException {
-        File database = new File("D:/xitongyiny/dbip-city-lite-2025-11.mmdb");
+        if (mmdbPath == null || mmdbPath.isBlank()) {
+            // 未配置路径时，不启用地理库，后续调用将返回降级信息
+            databaseReader = null;
+            return;
+        }
+        File database = new File(mmdbPath);
+        if (!database.exists()) {
+            // 文件不存在，记录并降级
+            databaseReader = null;
+            return;
+        }
         databaseReader = new DatabaseReader.Builder(database).build();
     }
 
@@ -43,13 +56,19 @@ public class IpLocationsServiceImpl extends ServiceImpl<IpLocationsMapper, IpLoc
     public Map<String, Object> getGeoInfo(String ipAddress) {
         Map<String, Object> result = new HashMap<>();
         try {
-            City city = databaseReader.city(InetAddress.getByName(ipAddress)).getCity();
-            Country country = databaseReader.country(InetAddress.getByName(ipAddress)).getCountry();
-            Subdivision subdivision = databaseReader.city(InetAddress.getByName(ipAddress)).getMostSpecificSubdivision();
+            if (databaseReader == null) {
+                result.put("error", "GeoIP 数据库未配置或不可用");
+                return result;
+            }
+            var inet = InetAddress.getByName(ipAddress);
+            var cityResponse = databaseReader.city(inet);
+            City city = cityResponse.getCity();
+            Country country = cityResponse.getCountry();
+            Subdivision subdivision = cityResponse.getMostSpecificSubdivision();
             String cityName = city.getName();
             String countryName = country.getName();
             String regionName = subdivision.getName();
-            Location location = databaseReader.city(InetAddress.getByName(ipAddress)).getLocation();
+            Location location = cityResponse.getLocation();
             BigDecimal latitude = BigDecimal.valueOf(location.getLatitude());
             BigDecimal longitude = BigDecimal.valueOf(location.getLongitude());
 
@@ -65,7 +84,6 @@ public class IpLocationsServiceImpl extends ServiceImpl<IpLocationsMapper, IpLoc
             result.put("longitude", longitude);
             result.put("ip", ipAddress);
         } catch (Exception e) {
-            e.printStackTrace();
             result.put("error", "获取地理位置信息失败");
         }
         return result;

@@ -12,6 +12,10 @@ import org.springframework.security.authentication.UsernamePasswordAuthenticatio
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.web.filter.OncePerRequestFilter;
+import org.springframework.lang.NonNull;
+import com.example.logreg.generator.mapper.SysUserMapper;
+import com.example.logreg.generator.domain.SysUser;
+import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 
 import java.io.IOException;
 import java.io.PrintWriter;
@@ -25,17 +29,19 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     @Autowired
     private DBUserDetailsManager dbUserDetailsManager;
 
+    @Autowired
+    private SysUserMapper sysUserMapper;
+
     @Override
-    protected void doFilterInternal(HttpServletRequest request,
-                                    HttpServletResponse response,
-                                    FilterChain filterChain) throws ServletException, IOException {
+    protected void doFilterInternal(@NonNull HttpServletRequest request,
+                                    @NonNull HttpServletResponse response,
+                                    @NonNull FilterChain filterChain) throws ServletException, IOException {
         String authHeader = request.getHeader("Authorization");
         if (authHeader != null && authHeader.startsWith("Bearer ")) {
             String jwt = authHeader.substring(7);
-            logger.error("jwtutil is"+jwtUtil);
-            String username = null;
+            Long userId = null;
             try {
-                username = jwtUtil.getUsername(jwt);  // 使用注入的 JwtUtil
+                userId = jwtUtil.getUserId(jwt);
             } catch (Exception e) {
                 response.setStatus(401);
                 response.setContentType("application/json;charset=UTF-8");
@@ -44,8 +50,17 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                 }
                 return;
             }
-            if (username != null && SecurityContextHolder.getContext().getAuthentication() == null) {
-                UserDetails userDetails = dbUserDetailsManager.loadUserByUsername(username);
+            if (userId != null && SecurityContextHolder.getContext().getAuthentication() == null) {
+                SysUser sysUser = sysUserMapper.selectOne(new QueryWrapper<SysUser>().eq("id", userId).eq("deleted", 0));
+                if (sysUser == null) {
+                    response.setStatus(401);
+                    response.setContentType("application/json;charset=UTF-8");
+                    try (PrintWriter out = response.getWriter()) {
+                        out.write("{\"code\":401,\"message\":\"invalid user\"}");
+                    }
+                    return;
+                }
+                UserDetails userDetails = dbUserDetailsManager.loadUserByUsername(sysUser.getUsername());
                 if (jwtUtil.validateToken(jwt)) {
                     UsernamePasswordAuthenticationToken authenticationToken =
                             new UsernamePasswordAuthenticationToken(userDetails, null,

@@ -7,8 +7,6 @@ import java.util.Date;
 
 @Data
 public class ActivityVO {
-    private Long authorId;
-
     private String title;
 
     private String description;

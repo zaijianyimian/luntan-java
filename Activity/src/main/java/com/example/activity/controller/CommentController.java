@@ -20,7 +20,6 @@ import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import com.example.filter.generator.mapper.SysUserMapper;
 import com.example.filter.generator.domain.SysUser;
-import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import org.springframework.data.redis.core.script.DefaultRedisScript;
 import org.springframework.web.bind.annotation.*;
 
@@ -41,6 +40,9 @@ public class CommentController {
 
     @Resource
     private CommentsIndexService commentsIndexService;
+
+    @jakarta.annotation.Resource
+    private com.example.activity.service.RankingService rankingService;
 
     /** 关键：使用 StringRedisTemplate，避免把 Hash 的值序列化成 JSON 导致 HINCRBY 报错 */
     @Resource
@@ -67,21 +69,7 @@ public class CommentController {
         stringRedisTemplate.expire(key, COMMENT_TTL_MINUTES, TimeUnit.MINUTES);
     }
 
-    /** 仅刷新 TTL */
-    private void refreshTTL(String key) {
-        stringRedisTemplate.expire(key, COMMENT_TTL_MINUTES, TimeUnit.MINUTES);
-    }
-
-    /** 从 Redis 读点赞数，读不到或非数字返回 null */
-    private Long readLikeFromRedis(String key) {
-        Object v = stringRedisTemplate.opsForHash().get(key, "countLikes");
-        if (v == null) return null;
-        try {
-            return Long.parseLong(v.toString());
-        } catch (Exception e) {
-            return null;
-        }
-    }
+    
 
     /** 初始化 Redis：优先从 ES 取；ES 没有再回退 DB；最后确保 countLikes 是数字 */
     private Comments initRedisFromEsOrDb(Integer id) {
@@ -115,7 +103,6 @@ public class CommentController {
     // ----------------- 1) 新增评论：DB -> ES -> Redis(Hash, 10min) -----------------
 
     @PostMapping("/activity/comment")
-    @Transactional
     public MessageDTO addComment(@RequestBody CommentAddVO vo) {
         if (vo == null || vo.getUserId() == null
                 || vo.getActivityId() == null
@@ -135,6 +122,10 @@ public class CommentController {
             return new FailureDTO<>(Messages.SERVER_ERROR, null);
         }
 
+        if (comment.getActivityId() != null) {
+            rankingService.incCommentScore(comment.getActivityId());
+        }
+
         // ES 索引（upsert）
         commentsIndexService.indexAfterCommit(new CommentESSave(comment));
 
@@ -147,7 +138,6 @@ public class CommentController {
     // ----------------- 2) 删除：先删 Redis -> 再删 DB -> 再删 ES -> 再尝试删 Redis -----------------
 
     @DeleteMapping("/activity/comment/{id}")
-    @Transactional
     public MessageDTO deleteComment(@PathVariable Integer id) {
         String hashKey = keyOf(id);
 
@@ -163,6 +153,11 @@ public class CommentController {
         if (!removed) {
             return new FailureDTO<>(Messages.SERVER_ERROR, id);
         }
+        try {
+            if (exist.getActivityId() != null) {
+                rankingService.decCommentScore(exist.getActivityId());
+            }
+        } catch (Exception ignore) {}
 
         // 删 ES
         try {
@@ -180,7 +175,6 @@ public class CommentController {
     // ----------------- 3) 点赞：Redis -> （缺失则 ES/DB 回填）-> HINCRBY +1 -> TTL -> 同步 DB & ES -----------------
 
     @GetMapping("/activity/comment/like/{id}")
-    @Transactional
     public MessageDTO likeComment(@PathVariable Integer id) {
         String key = keyOf(id);
         HashOperations<String, Object, Object> h = stringRedisTemplate.opsForHash();
@@ -209,7 +203,6 @@ public class CommentController {
     // ----------------- 5) 取消点赞：同点赞，但 HINCRBY -1（不小于 0） -----------------
 
     @GetMapping("/activity/comment/unlike/{id}")
-    @Transactional
     public MessageDTO unlikeComment(@PathVariable Integer id) {
         String key = keyOf(id);
         HashOperations<String, Object, Object> h = stringRedisTemplate.opsForHash();

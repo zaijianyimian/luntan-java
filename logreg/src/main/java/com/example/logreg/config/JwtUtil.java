@@ -32,10 +32,9 @@ public class JwtUtil {
         byte[] key = Decoders.BASE64.decode(SECRET);
         return Keys.hmacShaKeyFor(key);
     }
-    //生成token
-    public String generateToken(String username){
+    public String generateToken(Long userId){
         return Jwts.builder()
-                .subject(username)
+                .subject(String.valueOf(userId))
                 .issuedAt(new Date())
                 .expiration(new Date(System.currentTimeMillis() + EXPIRAION))
                 .signWith(getSignKey())
@@ -53,8 +52,9 @@ public class JwtUtil {
                 .getPayload();
     }
 
-    public String getUsername(String token) throws IllegalAccessException {
-        return parseToken(token).getSubject();
+    public Long getUserId(String token) {
+        String sub = parseToken(token).getSubject();
+        return sub == null ? null : Long.parseLong(sub);
     }
 
     //验证token是否有效

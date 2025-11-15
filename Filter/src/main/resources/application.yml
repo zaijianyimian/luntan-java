@@ -27,3 +27,5 @@ knife4j:
   path: /doc.html
 server:
   port: 9999
+jwt:
+  token: YWFhYmJiY2NjZGRkZWVlZmZmMTIzNDU2Nzg5MGFiY2RlZmdo

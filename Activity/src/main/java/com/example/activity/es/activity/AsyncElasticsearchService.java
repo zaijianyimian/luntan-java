@@ -11,12 +11,14 @@ public class AsyncElasticsearchService {
     @Resource
     private ActivityES activityES;
 
-    @Async
+    // 使用命名执行器，便于容量治理与监控
+    @Async("asyncExecutor")
     public void indexAsync(ActivityESSave activities) {
         activityES.save(activities);
     }
 
-    @Async
+    // 使用命名执行器，便于容量治理与监控
+    @Async("asyncExecutor")
     public void deleteAsync(Integer id) {
         activityES.deleteById(id);
     }

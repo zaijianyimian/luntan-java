@@ -3,31 +3,41 @@ spring:
     name: Activity-Management
   datasource:
     driver-class-name: com.mysql.cj.jdbc.Driver
-    url: jdbc:mysql://localhost:3306/activity?serverTimezone=Asia/Shanghai&useUnicode=true&characterEncoding=utf-8&allowMultiQueries=true&useSSL=false&allowPublicKeyRetrieval=true
-    username: root
-    password: 126824
+    # 使用环境变量配置数据库连接，避免明文凭据
+    url: ${DB_URL:jdbc:mysql://localhost:3306/activity?serverTimezone=Asia/Shanghai&useUnicode=true&characterEncoding=utf-8&allowMultiQueries=true&useSSL=false&allowPublicKeyRetrieval=true}
+    username: ${DB_USERNAME:root}
+    password: ${DB_PASSWORD:}
   data:
     redis:
-      host: 123.56.138.127
-      port: 6379
-      password: 123456
+      # Redis 连接参数通过环境变量传入
+      host: ${REDIS_HOST:127.0.0.1}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:}
       timeout: 10000
       database: 0
-      username: ming
+      username: ${REDIS_USERNAME:}
   elasticsearch:
-    uris: 123.56.138.127:9200
-    username: ming
-    password: 123456
+    uris: ${ES_URIS:127.0.0.1:9200}
+    username: ${ES_USERNAME:}
+    password: ${ES_PASSWORD:}
   jackson:
     deserialization:
       fail-on-unknown-properties: false
   rabbitmq:
-    host: 123.56.138.127
-    port: 5672
-    username: ming
-    password: 123456
+    host: ${RABBIT_HOST:127.0.0.1}
+    port: ${RABBIT_PORT:5672}
+    username: ${RABBIT_USERNAME:}
+    password: ${RABBIT_PASSWORD:}
     virtual-host: /
+jwt:
+  # JWT 密钥通过环境变量注入
+  token: ${JWT_TOKEN:}
 logcat:
   api:
-    key: ak_1Uk5ha1Tb3tI7iy3li4hS4Ek35G7l
+    key: ${LOGCAT_API_KEY:}
+
+# GeoIP 数据库路径配置（可选）
+geoip:
+  mmdb:
+    path: ${GEOIP_MMDB_PATH:}
 

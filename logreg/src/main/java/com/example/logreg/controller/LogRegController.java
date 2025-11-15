@@ -5,7 +5,11 @@ import com.example.logreg.dto.BaseDto;
 import com.example.logreg.dto.VerifyDTO;
 import com.example.logreg.dto.extend.*;
 import com.example.logreg.generator.domain.securitydomconf.SysUserDetails;
+import com.example.logreg.generator.mapper.SysUserMapper;
+import com.example.logreg.generator.domain.SysUser;
+import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.example.logreg.config.JwtUtil;
+import com.example.logreg.service.NearbyService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.annotation.Resource;
@@ -36,26 +40,42 @@ public class LogRegController {
     @Autowired
     private PasswordEncoder passwordEncoder;
 
+    @Resource
+    private SysUserMapper sysUserMapper;
+
+    @Resource
+    private NearbyService nearbyService;
+
     @PostMapping("/user/login")
     public ResponseEntity<BaseDto> login(@RequestBody VerifyDTO loginData) {
-        String username = loginData.getEmail();
-        String password = loginData.getCode();
-
-        log.error("用户登录账号：" + username + "，密码：" + password);
+        String username = loginData.getUsername();
+        String password = loginData.getPassword();
+        if ((username == null || username.isBlank()) && loginData.getEmail() != null) {
+            username = loginData.getEmail();
+        }
+        if ((password == null || password.isBlank()) && loginData.getCode() != null) {
+            password = loginData.getCode();
+        }
 
         try {
             Authentication authentication = authenticationManager.authenticate(
                     new UsernamePasswordAuthenticationToken(username, password)
             );
 
-            String token = jwtUtil.generateToken(username);
+            SysUser u = sysUserMapper.selectOne(new QueryWrapper<SysUser>().eq("username", username).eq("deleted", 0));
+            if (u == null) {
+                Map<String, Object> errorResponse = new HashMap<>();
+                errorResponse.put("error", "用户不存在");
+                errorResponse.put("message", "登录失败");
+                return ResponseEntity.ok(new LoginFailureDto());
+            }
+            String token = jwtUtil.generateToken(u.getId());
+            if (loginData.getLatitude() != null && loginData.getLongitude() != null) {
+                nearbyService.updateUserLocation(u.getId(), loginData.getLatitude(), loginData.getLongitude());
+            }
             return ResponseEntity.ok(new LoginSuccessDto(token));
 
         } catch (Exception e) {
-            Map<String, Object> errorResponse = new HashMap<>();
-            errorResponse.put("error", "用户名或密码错误");
-            errorResponse.put("message", "登录失败");
-
             return ResponseEntity.ok(new LoginFailureDto());
         }
     }

@@ -12,6 +12,7 @@ import org.springframework.stereotype.Service;
 * @createDate 2025-11-08 13:55:58
 */
 @Service
+@org.springframework.transaction.annotation.Transactional
 public class CommentsServiceImpl extends ServiceImpl<CommentsMapper, Comments>
     implements CommentsService{
 

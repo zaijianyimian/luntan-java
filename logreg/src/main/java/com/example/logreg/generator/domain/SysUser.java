@@ -23,6 +23,8 @@ public class SysUser {
     @Size(max = 50, message = "昵称长度不能超过50字符")
     private String nickname; // 昵称
 
+    private String avatarUrl; // 头像URL
+
     @Email(message = "邮箱格式不正确")
     private String email; // 邮箱
 

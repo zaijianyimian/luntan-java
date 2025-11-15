@@ -10,18 +10,30 @@ import org.springframework.amqp.rabbit.annotation.RabbitListener;
 import org.springframework.stereotype.Component;
 
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicReference;
 
 @Component
 public class LikeBatchConsumer {
 
     private final ObjectMapper mapper = new ObjectMapper();
-    private final ConcurrentHashMap<Long, CommentCountLike> commentAgg = new ConcurrentHashMap<>();
-    private final ConcurrentHashMap<Integer, ActivityCountLike> activityAgg = new ConcurrentHashMap<>();
-    private final ConcurrentHashMap<String, com.example.likes.domain.CommentLike> commentLikeAgg = new ConcurrentHashMap<>();
+    // 使用 AtomicReference 包装聚合缓存，便于在刷盘时原子交换快照，避免与消费者并发冲突
+    private final AtomicReference<ConcurrentHashMap<Long, CommentCountLike>> commentAggRef = new AtomicReference<>(new ConcurrentHashMap<>());
+    private final AtomicReference<ConcurrentHashMap<Integer, ActivityCountLike>> activityAggRef = new AtomicReference<>(new ConcurrentHashMap<>());
+    private final AtomicReference<ConcurrentHashMap<String, com.example.likes.domain.CommentLike>> commentLikeAggRef = new AtomicReference<>(new ConcurrentHashMap<>());
 
-    public ConcurrentHashMap<Long, CommentCountLike> getCommentAgg() { return commentAgg; }
-    public ConcurrentHashMap<Integer, ActivityCountLike> getActivityAgg() { return activityAgg; }
-    public ConcurrentHashMap<String, com.example.likes.domain.CommentLike> getCommentLikeAgg() { return commentLikeAgg; }
+    public ConcurrentHashMap<Long, CommentCountLike> getCommentAgg() { return commentAggRef.get(); }
+    public ConcurrentHashMap<Integer, ActivityCountLike> getActivityAgg() { return activityAggRef.get(); }
+    public ConcurrentHashMap<String, com.example.likes.domain.CommentLike> getCommentLikeAgg() { return commentLikeAggRef.get(); }
+
+    public ConcurrentHashMap<Long, CommentCountLike> swapCommentAgg() {
+        return commentAggRef.getAndSet(new ConcurrentHashMap<>());
+    }
+    public ConcurrentHashMap<Integer, ActivityCountLike> swapActivityAgg() {
+        return activityAggRef.getAndSet(new ConcurrentHashMap<>());
+    }
+    public ConcurrentHashMap<String, com.example.likes.domain.CommentLike> swapCommentLikeAgg() {
+        return commentLikeAggRef.getAndSet(new ConcurrentHashMap<>());
+    }
 
     @RabbitListener(queues = "commentchannel")
     public void onCommentBatch(String payload) throws Exception {
@@ -36,7 +48,7 @@ public class LikeBatchConsumer {
             c.setCommentId(commentId);
             c.setActivityId(activityId);
             c.setCountLikes(countLikes);
-            commentAgg.put(commentId, c);
+            commentAggRef.get().put(commentId, c);
 
             JsonNode users = n.get("users");
             if (users != null && users.isArray()) {
@@ -47,7 +59,7 @@ public class LikeBatchConsumer {
                     cl.setActivityId(activityId);
                     cl.setUserId(userId);
                     cl.setCreatedAt(new java.util.Date());
-                    commentLikeAgg.put(commentId + ":" + userId, cl);
+                    commentLikeAggRef.get().put(commentId + ":" + userId, cl);
                 }
             }
         }
@@ -64,7 +76,7 @@ public class LikeBatchConsumer {
             ActivityCountLike a = new ActivityCountLike();
             a.setActivityId(activityId);
             a.setCountLikes(countLikes);
-            activityAgg.put(activityId, a);
+            activityAggRef.get().put(activityId, a);
         }
     }
 }

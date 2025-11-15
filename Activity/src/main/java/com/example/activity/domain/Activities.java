@@ -71,7 +71,6 @@ public class Activities implements Serializable {
 
     // Constructor to convert ActivityVO to Activities
     public Activities(ActivityVO activityVO) {
-        this.authorId = activityVO.getAuthorId();
         this.title = activityVO.getTitle();
         this.description = activityVO.getDescription();
         this.categoryId = activityVO.getCategoryId();
