@@ -8,6 +8,8 @@ import com.example.activity.dto.MessageDTO;
 import com.example.activity.dto.SuccessDTO;
 import com.example.activity.es.activity.ActivityIndexService;
 import com.example.activity.message.Messages;
+import com.example.activity.feign.UserServiceClient;
+import com.example.activity.dto.UserBasicDTO;
 import com.example.activity.pojo.ActivityESSave;
 import com.example.activity.service.ActivitiesService;
 import com.example.activity.vo.ActivityVO;
@@ -22,9 +24,9 @@ import org.redisson.api.RLock;
 import org.redisson.api.RedissonClient;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.script.DefaultRedisScript;
-import com.example.filter.generator.mapper.SysUserMapper;
-import com.example.filter.generator.domain.SysUser;
-import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
+import org.springframework.web.context.request.RequestContextHolder;
+import org.springframework.web.context.request.ServletRequestAttributes;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.transaction.annotation.Transactional;
@@ -46,8 +48,6 @@ public class ActivityController {
     @Resource
     private StringRedisTemplate stringRedisTemplate;
 
-    @Resource
-    private SysUserMapper sysUserMapper;
 
     @Resource
     private ActivitiesService activitiesService;
@@ -60,6 +60,9 @@ public class ActivityController {
 
     @Resource
     private RedissonClient redissonClient;
+
+    @Resource
+    private UserServiceClient userServiceClient;
 
     
 
@@ -340,11 +343,21 @@ public class ActivityController {
      */
     private Page<ActivityESSave> toEsLikePage(IPage<Activities> dbPage) {
         Page<ActivityESSave> page = new Page<>(dbPage.getCurrent(), dbPage.getSize(), dbPage.getTotal());
-        page.setRecords(
-                dbPage.getRecords().stream()
-                        .map(ActivityESSave::new)
-                        .collect(Collectors.toList())
-        );
+        java.util.List<ActivityESSave> rec = dbPage.getRecords().stream().map(ActivityESSave::new).collect(Collectors.toList());
+        java.util.Set<Long> ids = rec.stream().map(ActivityESSave::getAuthorId).filter(Objects::nonNull).collect(Collectors.toSet());
+        if (!ids.isEmpty()) {
+            SuccessDTO<java.util.List<UserBasicDTO>> resp = userServiceClient.basics(ids.stream().map(String::valueOf).collect(Collectors.joining(",")));
+            java.util.Map<Long, String> m = new java.util.HashMap<>();
+            if (resp != null && resp.getData() != null) {
+                for (UserBasicDTO u : resp.getData()) {
+                    if (u.getUserId() != null) m.put(u.getUserId(), u.getAvatarUrl());
+                }
+            }
+            for (ActivityESSave a : rec) {
+                if (a.getAuthorId() != null) a.setAuthorImage(m.get(a.getAuthorId()));
+            }
+        }
+        page.setRecords(rec);
         return page;
     }
 
@@ -358,7 +371,21 @@ public class ActivityController {
                 esPage.getSize(),
                 esPage.getTotalElements()
         );
-        p.setRecords(esPage.getContent());
+        java.util.List<ActivityESSave> rec = new java.util.ArrayList<>(esPage.getContent());
+        java.util.Set<Long> ids = rec.stream().map(ActivityESSave::getAuthorId).filter(Objects::nonNull).collect(Collectors.toSet());
+        if (!ids.isEmpty()) {
+            SuccessDTO<java.util.List<UserBasicDTO>> resp = userServiceClient.basics(ids.stream().map(String::valueOf).collect(Collectors.joining(",")));
+            java.util.Map<Long, String> m = new java.util.HashMap<>();
+            if (resp != null && resp.getData() != null) {
+                for (UserBasicDTO u : resp.getData()) {
+                    if (u.getUserId() != null) m.put(u.getUserId(), u.getAvatarUrl());
+                }
+            }
+            for (ActivityESSave a : rec) {
+                if (a.getAuthorId() != null) a.setAuthorImage(m.get(a.getAuthorId()));
+            }
+        }
+        p.setRecords(rec);
         return p;
     }
 
@@ -448,11 +475,17 @@ public class ActivityController {
     }
 
     private Long currentUserId() {
-        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
-        if (auth == null || auth.getName() == null) return null;
-        String username = auth.getName();
-        SysUser u = sysUserMapper.selectOne(new QueryWrapper<SysUser>().eq("username", username).eq("deleted", 0));
-        return u != null ? u.getId() : null;
+        try {
+            ServletRequestAttributes attrs = (ServletRequestAttributes) RequestContextHolder.getRequestAttributes();
+            if (attrs == null) return null;
+            String auth = attrs.getRequest().getHeader("Authorization");
+            if (auth == null || !auth.startsWith("Bearer ")) return null;
+            String payload = new String(java.util.Base64.getUrlDecoder().decode(auth.substring(7).split("\\.")[1]), java.nio.charset.StandardCharsets.UTF_8);
+            var tree = new ObjectMapper().readTree(payload);
+            if (tree.has("sub")) return tree.get("sub").asLong();
+            if (tree.has("userId")) return tree.get("userId").asLong();
+            return null;
+        } catch (Exception e) { return null; }
     }
     /**
      * 范围查询：查找附近指定半径（默认10公里）内的活动

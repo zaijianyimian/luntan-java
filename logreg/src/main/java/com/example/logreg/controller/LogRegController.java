@@ -2,7 +2,11 @@ package com.example.logreg.controller;
 
 import com.example.logreg.config.DBUserDetailsManager;
 import com.example.logreg.dto.BaseDto;
-import com.example.logreg.dto.VerifyDTO;
+import com.example.logreg.dto.LoginDTO;
+import com.example.logreg.dto.RegisterVO;
+import com.example.logreg.dto.SuccessDTO;
+import com.example.logreg.dto.UserInfoDTO;
+import com.example.logreg.dto.ChangePassVO;
 import com.example.logreg.dto.extend.*;
 import com.example.logreg.generator.domain.securitydomconf.SysUserDetails;
 import com.example.logreg.generator.mapper.SysUserMapper;
@@ -47,58 +51,42 @@ public class LogRegController {
     private NearbyService nearbyService;
 
     @PostMapping("/user/login")
-    public ResponseEntity<BaseDto> login(@RequestBody VerifyDTO loginData) {
+    public ResponseEntity<BaseDto> login(@RequestBody LoginDTO loginData) {
         String username = loginData.getUsername();
         String password = loginData.getPassword();
-        if ((username == null || username.isBlank()) && loginData.getEmail() != null) {
-            username = loginData.getEmail();
-        }
-        if ((password == null || password.isBlank()) && loginData.getCode() != null) {
-            password = loginData.getCode();
-        }
 
-        try {
-            Authentication authentication = authenticationManager.authenticate(
-                    new UsernamePasswordAuthenticationToken(username, password)
-            );
-
-            SysUser u = sysUserMapper.selectOne(new QueryWrapper<SysUser>().eq("username", username).eq("deleted", 0));
-            if (u == null) {
-                Map<String, Object> errorResponse = new HashMap<>();
-                errorResponse.put("error", "用户不存在");
-                errorResponse.put("message", "登录失败");
-                return ResponseEntity.ok(new LoginFailureDto());
-            }
-            String token = jwtUtil.generateToken(u.getId());
-            if (loginData.getLatitude() != null && loginData.getLongitude() != null) {
-                nearbyService.updateUserLocation(u.getId(), loginData.getLatitude(), loginData.getLongitude());
-            }
-            return ResponseEntity.ok(new LoginSuccessDto(token));
-
-        } catch (Exception e) {
+        SysUser u = sysUserMapper.selectOne(new QueryWrapper<SysUser>().eq("username", username).eq("deleted", 0));
+        if (u == null || u.getStatus() == null || u.getStatus() != 1) {
             return ResponseEntity.ok(new LoginFailureDto());
         }
+        if (!passwordEncoder.matches(password, u.getPassword())) {
+            return ResponseEntity.ok(new LoginFailureDto());
+        }
+
+        String token = jwtUtil.generateToken(u.getId());
+        if (loginData.getLatitude() != null && loginData.getLongitude() != null) {
+            nearbyService.updateUserLocation(u.getId(), loginData.getLatitude(), loginData.getLongitude());
+        }
+        return ResponseEntity.ok(new LoginSuccessDto(token));
     }
 
 
 
     //测试接口
     @GetMapping("/user/info")
-    public Map<String, Object> userInfo(Authentication authentication) {
-        Map<String, Object> map = new HashMap<>();
-        map.put("msg", "用户信息获取成功");
-        map.put("username", authentication.getName());
-        map.put("roles", authentication.getAuthorities());
-        return map;
+    public ResponseEntity<SuccessDTO<UserInfoDTO>> userInfo(Authentication authentication) {
+        java.util.List<String> roles = authentication.getAuthorities().stream().map(a -> a.getAuthority()).toList();
+        UserInfoDTO dto = new UserInfoDTO("用户信息获取成功", authentication.getName(), roles);
+        return ResponseEntity.ok(new SuccessDTO<>(dto));
     }
 
     @PostMapping("/user/register")
     @Operation(summary = "用户注册")
-    public ResponseEntity<BaseDto> register(@RequestBody Map<String,String> registerData){
+    public ResponseEntity<BaseDto> register(@RequestBody RegisterVO registerData){
         log.error("用户注册");
-        String username = registerData.get("username");
-        String password = registerData.get("password");
-        String email = registerData.get("email");
+        String username = registerData.getUsername();
+        String password = registerData.getPassword();
+        String email = registerData.getEmail();
 
         if(username == null || username.trim().isEmpty()){
             return ResponseEntity.ok(new RegisterFailureDto("用户名不能为空"));
@@ -107,33 +95,44 @@ public class LogRegController {
             return  ResponseEntity.ok(new RegisterFailureDto("用户已存在"));
         }
         SysUserDetails userDetails = new SysUserDetails(username,password,email,null);
-        dbUserDetailsManager.createUser(userDetails);
-        return ResponseEntity.ok(new RegisterSuccessDto());
+        try{
+            dbUserDetailsManager.createUser(userDetails);
+            return ResponseEntity.ok(new RegisterSuccessDto());
+        }catch (RuntimeException e){
+            return ResponseEntity.ok(new RegisterFailureDto(e.getMessage()));
+        }
     }
     @PostMapping("/user/changepass")
     @Operation(summary = "修改密码")
-    public ResponseEntity<BaseDto> changePass(@RequestBody Map<String,String> changePassData){
-        log.error("修改密码");
-        //获取参数
-        String username = changePassData.get("username");
-        String oldPassword = changePassData.get("oldPassword");
-        String newPassword = changePassData.get("newPassword");
-        //验证参数
-        if(username == null || username.trim().isEmpty()){
-            return ResponseEntity.ok(new RegisterFailureDto("用户名不能为空"));
+    public ResponseEntity<BaseDto> changePass(@RequestHeader("Authorization") String authorization,
+                                              @RequestBody ChangePassVO changePassVO){
+        String token = authorization != null && authorization.startsWith("Bearer ") ? authorization.substring(7) : null;
+        if (token == null) {
+            return ResponseEntity.ok(new RegisterFailureDto("未提供token"));
         }
-        if(!dbUserDetailsManager.userExists(username)){
-            return  ResponseEntity.ok(new RegisterFailureDto("用户不存在"));
+        Long userId;
+        try {
+            userId = jwtUtil.getUserId(token);
+        } catch (Exception e) {
+            return ResponseEntity.ok(new RegisterFailureDto("token无效"));
         }
-        // 不再强转为 SysUserDetails，按接口使用
-        UserDetails userDetails = dbUserDetailsManager.loadUserByUsername(username);
-        if(!passwordEncoder.matches(oldPassword, userDetails.getPassword())){
+        SysUser u = sysUserMapper.selectOne(new QueryWrapper<SysUser>().eq("id", userId).eq("deleted", 0));
+        if (u == null || u.getStatus() == null || u.getStatus() != 1) {
+            return ResponseEntity.ok(new RegisterFailureDto("用户不存在或被禁用"));
+        }
+        String oldPassword = changePassVO.getOldPassword();
+        String newPassword = changePassVO.getNewPassword();
+        if (oldPassword == null || oldPassword.trim().isEmpty()) {
+            return ResponseEntity.ok(new RegisterFailureDto("旧密码不能为空"));
+        }
+        if (!passwordEncoder.matches(oldPassword, u.getPassword())) {
             return ResponseEntity.ok(new RegisterFailureDto("旧密码错误"));
         }
-        if(newPassword == null || newPassword.trim().isEmpty()){
+        if (newPassword == null || newPassword.trim().isEmpty()) {
             return ResponseEntity.ok(new RegisterFailureDto("新密码不能为空"));
         }
-        dbUserDetailsManager.changePassword(oldPassword,newPassword);
+        u.setPassword(passwordEncoder.encode(newPassword));
+        sysUserMapper.updateById(u);
         return ResponseEntity.ok(new ChangeSuccessDto());
     }
 }

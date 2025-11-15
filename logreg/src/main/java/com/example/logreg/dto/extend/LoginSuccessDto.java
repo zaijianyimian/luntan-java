@@ -1,9 +1,11 @@
 package com.example.logreg.dto.extend;
 
 import com.example.logreg.dto.BaseDto;
+import com.fasterxml.jackson.annotation.JsonPropertyOrder;
 import lombok.Data;
 
 @Data
+@JsonPropertyOrder({"code", "message", "token"})
 public class LoginSuccessDto extends BaseDto {
     private String token;
 
@@ -12,7 +14,6 @@ public class LoginSuccessDto extends BaseDto {
         this.token = token;
     }
 
-    // 添加无参构造函数以满足Lombok要求
     public LoginSuccessDto() {
         super(200, "登陆成功");
     }

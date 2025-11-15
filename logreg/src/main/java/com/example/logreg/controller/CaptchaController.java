@@ -6,7 +6,7 @@ import com.fasterxml.jackson.databind.JsonDeserializer;
 import jakarta.annotation.Resource;
 import jakarta.mail.internet.MimeMessage;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.data.redis.core.RedisTemplate;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.mail.javamail.MimeMessageHelper;
 import org.springframework.web.bind.annotation.*;
@@ -19,8 +19,8 @@ import java.util.concurrent.TimeUnit;
 public class CaptchaController {
     @Resource
     private JavaMailSender sender;
-    @Resource
-    private RedisTemplate<String,String> redisTemplate;
+    @Resource(name = "stringRedisTemplate")
+    private StringRedisTemplate stringRedisTemplate;
 
     private static final String HEADER = "验证码";
     private static final String CONTENT_PREFIX = "<div style=\"background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 30px; border-radius: 10px; max-width: 500px; margin: 0 auto; font-family: 'Arial', sans-serif;\">"
@@ -53,7 +53,7 @@ public class CaptchaController {
             helper.setTo(email);
             helper.setFrom(from);
             sender.send(message);
-            redisTemplate.opsForValue().set(email,String.valueOf(code), 5000, TimeUnit.MINUTES);
+            stringRedisTemplate.opsForValue().set(email,String.valueOf(code), 5, TimeUnit.MINUTES);
             return new SuccessDTO<>(Messages.SUCCESS, code);
         } catch (Exception e) {
             e.printStackTrace();
@@ -65,12 +65,12 @@ public class CaptchaController {
     public MessageDTO verifyCaptcha(@RequestBody VerifyDTO verifyDTO) {
         String email = verifyDTO.getEmail();
         String code = verifyDTO.getCode();
-        String redisCode = redisTemplate.opsForValue().get(email);
+        String redisCode = stringRedisTemplate.opsForValue().get(email);
         if (redisCode == null) {
             return new FailureDTO<>(Messages.NOT_FOUND, "请先发送验证码");
         }
         if (redisCode.equals(code)) {
-            redisTemplate.delete(email);
+            stringRedisTemplate.delete(email);
             return new SuccessDTO<>(Messages.SUCCESS, null);
         }
         return new FailureDTO<>(Messages.CONFLICT, "验证码错误");

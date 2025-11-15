@@ -7,7 +7,8 @@ import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-import java.util.Map;
+import com.example.activity.dto.IpInfoDTO;
+import com.example.activity.dto.GeoInfoDTO;
 
 @RestController
 @RequestMapping("/api")
@@ -16,12 +17,12 @@ public class IPController {
     @Resource
     private IpLocationsService ipLocationsService;
     @RequestMapping("/getip")
-    public Map<String, Object> getIp(HttpServletRequest request){
+    public IpInfoDTO getIp(HttpServletRequest request){
         return ipLocationsService.getClientIp(request);
     }
 
     @RequestMapping("/getgeo")
-    public Map<String, Object> getGeo(String ipAddress){
+    public GeoInfoDTO getGeo(String ipAddress){
         return ipLocationsService.getGeoInfo(ipAddress);
     }
 

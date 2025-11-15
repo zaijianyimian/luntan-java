@@ -56,6 +56,8 @@ public class DBUserDetailsManager implements UserDetailsManager {
             sysUser.setUsername(sysUserDetails.getUsername());
             sysUser.setPassword(passwordEncoder.encode(sysUserDetails.getPassword()));
             sysUser.setEmail(sysUserDetails.getEmail());
+            sysUser.setStatus(1);
+            sysUser.setDeleted(0);
             sysUser.setCreateAt(LocalDateTime.now());
 
             try {
@@ -152,17 +154,31 @@ public class DBUserDetailsManager implements UserDetailsManager {
             Long id = user.getId();
             QueryWrapper<RelUserRole> roleQueryWrapper = new QueryWrapper<>();
             roleQueryWrapper.select("role_id").eq("user_id", id);
-            List<Long> roleIds = relUserRoleMapper.selectList(roleQueryWrapper)
-                    .stream().map(RelUserRole::getRoleId).toList();
-            QueryWrapper<RelRolePerm> relRolePermQueryWrapper = new QueryWrapper<>();
-            relRolePermQueryWrapper.select("perm_id").in("role_id", roleIds);
-            //查询用户权限列表
-            List<Long> permIds = relRolePermMapper.selectList(relRolePermQueryWrapper)
-                    .stream().map(RelRolePerm::getPermId).toList();
-            QueryWrapper<SysPermission> permQueryWrapper = new QueryWrapper<>();
-            permQueryWrapper.select("code", "name").in("id", permIds);
-            List<String> permissions = sysPermissionMapper.selectList(permQueryWrapper)
-                    .stream().map(SysPermission::getCode).toList();
+            List<RelUserRole> relList = relUserRoleMapper.selectList(roleQueryWrapper);
+            List<Long> roleIds = (relList == null || relList.isEmpty())
+                    ? List.of()
+                    : relList.stream().map(RelUserRole::getRoleId).toList();
+
+            List<String> permissions;
+            if (roleIds == null || roleIds.isEmpty()) {
+                permissions = List.of();
+            } else {
+                QueryWrapper<RelRolePerm> relRolePermQueryWrapper = new QueryWrapper<>();
+                relRolePermQueryWrapper.select("perm_id").in("role_id", roleIds);
+                List<RelRolePerm> relPermList = relRolePermMapper.selectList(relRolePermQueryWrapper);
+                List<Long> permIds = (relPermList == null || relPermList.isEmpty())
+                        ? List.of()
+                        : relPermList.stream().map(RelRolePerm::getPermId).toList();
+
+                if (permIds == null || permIds.isEmpty()) {
+                    permissions = List.of();
+                } else {
+                    QueryWrapper<SysPermission> permQueryWrapper = new QueryWrapper<>();
+                    permQueryWrapper.select("code", "name").in("id", permIds);
+                    permissions = sysPermissionMapper.selectList(permQueryWrapper)
+                            .stream().map(SysPermission::getCode).toList();
+                }
+            }
             //返回用户信息
             return User.withUsername(user.getUsername())
                     .password(user.getPassword())

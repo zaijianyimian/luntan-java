@@ -19,8 +19,8 @@ import java.io.File;
 import java.io.IOException;
 import java.math.BigDecimal;
 import java.net.InetAddress;
-import java.util.HashMap;
-import java.util.Map;
+import com.example.activity.dto.IpInfoDTO;
+import com.example.activity.dto.GeoInfoDTO;
 
 /**
  * @description 针对表【ip_locations(存储 IP 地址的地理位置信息)】的数据库操作Service实现
@@ -53,11 +53,11 @@ public class IpLocationsServiceImpl extends ServiceImpl<IpLocationsMapper, IpLoc
     }
 
     // 查询 IP 地址的地理位置信息，并将其存入数据库，返回一个 Map 类型的数据
-    public Map<String, Object> getGeoInfo(String ipAddress) {
-        Map<String, Object> result = new HashMap<>();
+    public GeoInfoDTO getGeoInfo(String ipAddress) {
+        GeoInfoDTO result = new GeoInfoDTO();
         try {
             if (databaseReader == null) {
-                result.put("error", "GeoIP 数据库未配置或不可用");
+                result.setError("GeoIP 数据库未配置或不可用");
                 return result;
             }
             var inet = InetAddress.getByName(ipAddress);
@@ -77,21 +77,20 @@ public class IpLocationsServiceImpl extends ServiceImpl<IpLocationsMapper, IpLoc
             ipLocationsMapper.insertOrUpdate(ipLocations);
 
             // 将查询结果存储到 Map 中并返回
-            result.put("country", countryName);
-            result.put("region", regionName);
-            result.put("city", cityName);
-            result.put("latitude", latitude);
-            result.put("longitude", longitude);
-            result.put("ip", ipAddress);
+            result.setCountry(countryName);
+            result.setRegion(regionName);
+            result.setCity(cityName);
+            result.setLatitude(latitude);
+            result.setLongitude(longitude);
+            result.setIp(ipAddress);
         } catch (Exception e) {
-            result.put("error", "获取地理位置信息失败");
+            result.setError("获取地理位置信息失败");
         }
         return result;
     }
 
     // 获取客户端的 IP 地址，返回 Map 类型的数据
-    public Map<String, Object> getClientIp(HttpServletRequest req) {
-        Map<String, Object> result = new HashMap<>();
+    public IpInfoDTO getClientIp(HttpServletRequest req) {
         String clientIp = req.getHeader("x-forwarded-for");
         if (clientIp == null || clientIp.isEmpty() || "unknown".equalsIgnoreCase(clientIp)) {
             clientIp = req.getHeader("Proxy-Client-IP");
@@ -102,9 +101,6 @@ public class IpLocationsServiceImpl extends ServiceImpl<IpLocationsMapper, IpLoc
         if (clientIp == null || clientIp.isEmpty() || "unknown".equalsIgnoreCase(clientIp)) {
             clientIp = req.getRemoteAddr();
         }
-
-        // 将客户端 IP 存储在 Map 中并返回
-        result.put("ip", clientIp);
-        return result;
+        return new IpInfoDTO(clientIp);
     }
 }

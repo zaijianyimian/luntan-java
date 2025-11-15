@@ -3,8 +3,8 @@ package com.example.activity.service;
 import com.example.activity.domain.IpLocations;
 import com.baomidou.mybatisplus.extension.service.IService;
 import jakarta.servlet.http.HttpServletRequest;
-
-import java.util.Map;
+import com.example.activity.dto.IpInfoDTO;
+import com.example.activity.dto.GeoInfoDTO;
 
 /**
 * @author lenovo
@@ -13,6 +13,6 @@ import java.util.Map;
 */
 public interface IpLocationsService extends IService<IpLocations> {
 
-    Map<String,Object> getClientIp(HttpServletRequest request);
-    Map<String,Object> getGeoInfo(String ipAddress);
+    IpInfoDTO getClientIp(HttpServletRequest request);
+    GeoInfoDTO getGeoInfo(String ipAddress);
 }

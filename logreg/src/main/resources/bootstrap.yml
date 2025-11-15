@@ -3,7 +3,7 @@ spring:
     import:
       - optional:nacos:nacos-logreg-dev.yaml
   application:
-    name: usermanagement  # 建议小写一致
+    name: User-Management
   cloud:
     nacos:
       server-addr: 123.56.138.127:8848

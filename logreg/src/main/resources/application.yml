@@ -5,7 +5,7 @@ spring:
   datasource:
     druid:
       driver-class-name: com.mysql.cj.jdbc.Driver
-      url: jdbc:mysql://localhost:3306/luntan?useUnicode=true&characterEncoding=utf8&useSSL=false&serverTimezone=Asia/Shanghai&connectTimeout=3000&socketTimeout=6000
+      url: jdbc:mysql://localhost:3306/luntan?useUnicode=true&characterEncoding=utf8&useSSL=false&serverTimezone=Asia/Shanghai&connectTimeout=3000&socketTimeout=6000&allowPublicKeyRetrieval=true
       username: root
       password: 126824
       initial-size: 5
@@ -14,7 +14,7 @@ spring:
       max-wait: 6000
     username: root
     password: 126824
-    url: jdbc:mysql://localhost:3306/luntan?useUnicode=true&characterEncoding=utf8&useSSL=false&serverTimezone=Asia/Shanghai&connectTimeout=3000&socketTimeout=6000
+    url: jdbc:mysql://localhost:3306/luntan?useUnicode=true&characterEncoding=utf8&useSSL=false&serverTimezone=Asia/Shanghai&connectTimeout=3000&socketTimeout=6000&allowPublicKeyRetrieval=true
     driver-class-name: com.mysql.cj.jdbc.Driver
   cloud:
     nacos:
@@ -30,6 +30,10 @@ spring:
       timeout: 10000
       database: 0
       username: ming
+  servlet:
+    multipart:
+      max-file-size: 20MB
+      max-request-size: 20MB
 knife4j:
   enable: true
   path: /doc.html
@@ -44,7 +48,7 @@ jwt:
 
 storage:
   endpoint: ${STORAGE_ENDPOINT:http://123.56.138.127:9000}
-  accessKey: ${STORAGE_ACCESS_KEY:}
-  secretKey: ${STORAGE_SECRET_KEY:}
+  accessKey: jmZSBVR3PW090c5o4Cnh
+  secretKey: pqRPIsZKy7938B2LeG6wrbSHCFh5WxOjun4kTMOD
   bucket: ${STORAGE_BUCKET:avatars}
   region: ${STORAGE_REGION:us-east-1}

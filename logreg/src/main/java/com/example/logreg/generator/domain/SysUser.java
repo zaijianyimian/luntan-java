@@ -2,6 +2,7 @@ package com.example.logreg.generator.domain;
 
 import com.baomidou.mybatisplus.annotation.*;
 import jakarta.validation.constraints.*;
+import com.baomidou.mybatisplus.annotation.TableField;
 import lombok.Data;
 import java.time.LocalDateTime;
 
@@ -23,7 +24,8 @@ public class SysUser {
     @Size(max = 50, message = "昵称长度不能超过50字符")
     private String nickname; // 昵称
 
-    private String avatarUrl; // 头像URL
+    @TableField("photo_url")
+    private String photoUrl; // 头像URL
 
     @Email(message = "邮箱格式不正确")
     private String email; // 邮箱

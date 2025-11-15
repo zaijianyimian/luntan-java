@@ -16,10 +16,9 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.redis.core.HashOperations;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.security.core.Authentication;
-import org.springframework.security.core.context.SecurityContextHolder;
-import com.example.filter.generator.mapper.SysUserMapper;
-import com.example.filter.generator.domain.SysUser;
+import org.springframework.web.context.request.RequestContextHolder;
+import org.springframework.web.context.request.ServletRequestAttributes;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.data.redis.core.script.DefaultRedisScript;
 import org.springframework.web.bind.annotation.*;
 
@@ -48,8 +47,6 @@ public class CommentController {
     @Resource
     private StringRedisTemplate stringRedisTemplate;
 
-    @Resource
-    private SysUserMapper sysUserMapper;
 
     // ----------------- 工具方法 -----------------
 
@@ -222,11 +219,17 @@ public class CommentController {
     }
 
     private Long currentUserId() {
-        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
-        if (auth == null || auth.getName() == null) return null;
-        String username = auth.getName();
-        SysUser u = sysUserMapper.selectOne(new QueryWrapper<SysUser>().eq("username", username).eq("deleted", 0));
-        return u != null ? u.getId() : null;
+        try {
+            ServletRequestAttributes attrs = (ServletRequestAttributes) RequestContextHolder.getRequestAttributes();
+            if (attrs == null) return null;
+            String auth = attrs.getRequest().getHeader("Authorization");
+            if (auth == null || !auth.startsWith("Bearer ")) return null;
+            String payload = new String(java.util.Base64.getUrlDecoder().decode(auth.substring(7).split("\\.")[1]), java.nio.charset.StandardCharsets.UTF_8);
+            var tree = new ObjectMapper().readTree(payload);
+            if (tree.has("sub")) return tree.get("sub").asLong();
+            if (tree.has("userId")) return tree.get("userId").asLong();
+            return null;
+        } catch (Exception e) { return null; }
     }
 
     // ----------------- 4) 根据 activityId 获取（保持不变） -----------------
