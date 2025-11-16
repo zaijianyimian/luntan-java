@@ -8,7 +8,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 
 import java.util.List;
 
-@FeignClient(name = "User-Management")
+@FeignClient(name = "User-Management", configuration = AuthForwardFeignConfig.class)
 public interface UserServiceClient {
     @GetMapping("/api/users/basic")
     SuccessDTO<List<UserBasicDTO>> basics(@RequestParam("ids") String ids);

@@ -5,7 +5,7 @@ spring:
   datasource:
     druid:
       driver-class-name: com.mysql.cj.jdbc.Driver
-      url: jdbc:mysql://localhost:3306/luntan?useUnicode=true&characterEncoding=utf8&useSSL=false&serverTimezone=Asia/Shanghai&connectTimeout=3000&socketTimeout=6000
+      url: jdbc:mysql://localhost:3306/luntan?useUnicode=true&characterEncoding=utf8&useSSL=false&serverTimezone=Asia/Shanghai&connectTimeout=3000&socketTimeout=6000&allowPublicKeyRetrieval=true
       username: root
       password: 126824
       initial-size: 5
@@ -14,7 +14,7 @@ spring:
       max-wait: 6000
     username: root
     password: 126824
-    url: jdbc:mysql://localhost:3306/luntan?useUnicode=true&characterEncoding=utf8&useSSL=false&serverTimezone=Asia/Shanghai&connectTimeout=3000&socketTimeout=6000
+    url: jdbc:mysql://localhost:3306/luntan?useUnicode=true&characterEncoding=utf8&useSSL=false&serverTimezone=Asia/Shanghai&connectTimeout=3000&socketTimeout=6000&allowPublicKeyRetrieval=true
     driver-class-name: com.mysql.cj.jdbc.Driver
   cloud:
     nacos:

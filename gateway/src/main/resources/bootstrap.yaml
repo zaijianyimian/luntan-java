@@ -1,0 +1,27 @@
+spring:
+  config:
+    import:
+      - optional:nacos:nacos-gateway-dev.yaml
+  application:
+    name: GateWay
+  cloud:
+    nacos:
+      server-addr: 123.56.138.127:8848
+      config:
+        username: nacos  # 添加认证
+        password: VxykvMqce3  # 添加认证
+        namespace: public
+        group: DEFAULT_GROUP
+        prefix: nacos-gateway
+        file-extension: yaml
+        import-check:
+          enabled: false  # 尝试禁用检查
+      discovery:
+        username: nacos
+        password: VxykvMqce3
+  profiles:
+    active: dev
+  mail:
+    username: mingtops@163.com
+    password: EPjGi3BEMQNFtxqu
+    host: smtp.163.com

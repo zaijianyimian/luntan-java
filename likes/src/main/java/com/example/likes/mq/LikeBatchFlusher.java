@@ -22,18 +22,21 @@ public class LikeBatchFlusher {
     private final CommentCountLikeService commentService;
     private final com.example.likes.service.CommentLikeService commentLikeService;
     private final ActivityCountLikeService activityService;
+    private final com.example.likes.service.UserRelLikesService userRelLikesService;
     private final ElasticsearchOperations esOps;
 
     public LikeBatchFlusher(LikeBatchConsumer consumer,
                             CommentCountLikeService commentService,
                             ActivityCountLikeService activityService,
                             ElasticsearchOperations esOps,
-                            com.example.likes.service.CommentLikeService commentLikeService) {
+                            com.example.likes.service.CommentLikeService commentLikeService,
+                            com.example.likes.service.UserRelLikesService userRelLikesService) {
         this.consumer = consumer;
         this.commentService = commentService;
         this.activityService = activityService;
         this.esOps = esOps;
         this.commentLikeService = commentLikeService;
+        this.userRelLikesService = userRelLikesService;
     }
 
     @Scheduled(fixedDelay = 30000)
@@ -48,13 +51,22 @@ public class LikeBatchFlusher {
                 List<com.example.likes.domain.CommentLike> likes = new ArrayList<>(likeSnapshot.values());
                 commentLikeService.insertIgnoreBatch(likes);
             }
+            var unlikeSnapshot = consumer.swapCommentUnlikeAgg();
+            if (!unlikeSnapshot.isEmpty()) {
+                List<com.example.likes.domain.CommentLike> unlikes = new ArrayList<>(unlikeSnapshot.values());
+                try {
+                    commentLikeService.deleteBatch(unlikes);
+                } catch (Exception ignore) {}
+            }
             List<UpdateQuery> queries = new ArrayList<>();
             for (CommentCountLike c : comments) {
                 Document doc = Document.create();
                 // 修正字段名为 countLikes
                 doc.put("countLikes", c.getCountLikes());
                 UpdateQuery uq = UpdateQuery.builder(String.valueOf(c.getCommentId()))
-                        .withDocument(doc).build();
+                        .withDocument(doc)
+                        .withDocAsUpsert(true)
+                        .build();
                 queries.add(uq);
             }
             esOps.bulkUpdate(queries, IndexCoordinates.of("comments-all"));
@@ -71,10 +83,34 @@ public class LikeBatchFlusher {
                 // 修正字段名为 countLikes
                 doc.put("countLikes", a.getCountLikes());
                 UpdateQuery uq = UpdateQuery.builder(String.valueOf(a.getActivityId()))
-                        .withDocument(doc).build();
+                        .withDocument(doc)
+                        .withDocAsUpsert(true)
+                        .build();
                 queries.add(uq);
             }
             esOps.bulkUpdate(queries, IndexCoordinates.of("activity-all"));
+        }
+
+        var activityLikeSnapshot = consumer.swapActivityLikeAgg();
+        if (!activityLikeSnapshot.isEmpty()) {
+            List<com.example.likes.domain.UserRelLikes> rels = new ArrayList<>(activityLikeSnapshot.values());
+            try {
+                int n = userRelLikesService.insertIgnoreBatch(rels);
+                org.slf4j.LoggerFactory.getLogger(LikeBatchFlusher.class).info("flushed user_rel_likes rows={} ", n);
+            } catch (Exception e) {
+                org.slf4j.LoggerFactory.getLogger(LikeBatchFlusher.class).warn("flush user_rel_likes failed: {}", e.getMessage());
+            }
+        }
+
+        var activityUnlikeSnapshot = consumer.swapActivityUnlikeAgg();
+        if (!activityUnlikeSnapshot.isEmpty()) {
+            List<com.example.likes.domain.UserRelLikes> rels = new ArrayList<>(activityUnlikeSnapshot.values());
+            try {
+                int n = userRelLikesService.deleteBatch(rels);
+                org.slf4j.LoggerFactory.getLogger(LikeBatchFlusher.class).info("deleted user_rel_likes rows={} ", n);
+            } catch (Exception e) {
+                org.slf4j.LoggerFactory.getLogger(LikeBatchFlusher.class).warn("delete user_rel_likes failed: {}", e.getMessage());
+            }
         }
     }
 }

@@ -5,10 +5,15 @@ import com.example.activity.dto.ChatResponseDTO;
 import org.springframework.cloud.openfeign.FeignClient;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestHeader;
 
-@FeignClient(name = "longcat-chat", url = "https://api.longcat.chat")
+@FeignClient(
+    name = "longcat-chat",
+    url = "https://api.longcat.chat",
+    configuration = LongCatFeignConfig.class
+)
 public interface ServiceFeign {
-    @PostMapping("/openai/v1/chat/completions")
+
+    @PostMapping(value = "/openai/v1/chat/completions", consumes = "application/json")
     ChatResponseDTO chat(@RequestBody ChatRequestDTO request);
 }
+

@@ -24,4 +24,14 @@
         ON DUPLICATE KEY UPDATE activity_id = VALUES(activity_id)
     </insert>
 
+    <delete id="deleteBatch">
+        DELETE FROM comment_like
+        WHERE (comment_id, user_id) IN
+        (
+            <foreach collection="list" item="item" separator=",">
+                (#{item.commentId}, #{item.userId})
+            </foreach>
+        )
+    </delete>
+
 </mapper>

@@ -14,7 +14,17 @@ import org.springframework.stereotype.Service;
 @Service
 public class UserRelLikesServiceImpl extends ServiceImpl<UserRelLikesMapper, UserRelLikes>
     implements UserRelLikesService{
+    @Override
+    public int insertIgnoreBatch(java.util.List<UserRelLikes> items) {
+        if (items == null || items.isEmpty()) return 0;
+        return this.baseMapper.insertIgnoreBatch(items);
+    }
 
+    @Override
+    public int deleteBatch(java.util.List<UserRelLikes> items) {
+        if (items == null || items.isEmpty()) return 0;
+        return this.baseMapper.deleteBatch(items);
+    }
 }
 
 

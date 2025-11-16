@@ -43,6 +43,7 @@ public class SpringSecurityConfig {
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                         .requestMatchers("/api/login", "/api/register").permitAll()
+                        .requestMatchers("/api/activity/test").permitAll()
                         .requestMatchers("/doc.html", "/swagger-ui/**", "/v3/api-docs/**", "/webjars/**").permitAll()
                         .requestMatchers(HttpMethod.DELETE, "/activity/**").hasAuthority("activity:delete")
                         .anyRequest().authenticated()

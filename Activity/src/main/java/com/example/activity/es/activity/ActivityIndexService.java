@@ -23,7 +23,7 @@ import java.util.stream.StreamSupport;
 public class ActivityIndexService {
 
     private static final Logger logger = LoggerFactory.getLogger(ActivityIndexService.class);
-    public final static int DEFAULT_PAGE_SIZE = 2;
+    public final static int DEFAULT_PAGE_SIZE = 50;
 
     @Resource
     private ActivityES activityES;
@@ -34,28 +34,36 @@ public class ActivityIndexService {
     @Resource
     private AsyncElasticsearchService asyncElasticsearchService;
 
-    // 在事务提交后再触发 ES 索引，避免未提交数据被索引
+    // 在事务提交后再触发 ES 索引，避免未提交数据被索引；无事务时直接索引
     public void indexAfterCommit(ActivityESSave activities) {
-        org.springframework.transaction.support.TransactionSynchronizationManager.registerSynchronization(
-                new org.springframework.transaction.support.TransactionSynchronization() {
-                    @Override
-                    public void afterCommit() {
-                        asyncElasticsearchService.indexAsync(activities);
+        if (org.springframework.transaction.support.TransactionSynchronizationManager.isSynchronizationActive()) {
+            org.springframework.transaction.support.TransactionSynchronizationManager.registerSynchronization(
+                    new org.springframework.transaction.support.TransactionSynchronization() {
+                        @Override
+                        public void afterCommit() {
+                            asyncElasticsearchService.indexAsync(activities);
+                        }
                     }
-                }
-        );
+            );
+        } else {
+            asyncElasticsearchService.indexAsync(activities);
+        }
     }
 
     // 在事务提交后再触发 ES 删除，保证索引与数据库一致
     public void deleteAfterCommit(Integer id) {
-        org.springframework.transaction.support.TransactionSynchronizationManager.registerSynchronization(
-                new org.springframework.transaction.support.TransactionSynchronization() {
-                    @Override
-                    public void afterCommit() {
-                        asyncElasticsearchService.deleteAsync(id);
+        if (org.springframework.transaction.support.TransactionSynchronizationManager.isSynchronizationActive()) {
+            org.springframework.transaction.support.TransactionSynchronizationManager.registerSynchronization(
+                    new org.springframework.transaction.support.TransactionSynchronization() {
+                        @Override
+                        public void afterCommit() {
+                            asyncElasticsearchService.deleteAsync(id);
+                        }
                     }
-                }
-        );
+            );
+        } else {
+            asyncElasticsearchService.deleteAsync(id);
+        }
     }
 
     public List<ActivityESSave> searchByKeyword(String keyword) {
@@ -92,5 +100,4 @@ public class ActivityIndexService {
         Pageable pageable = PageRequest.of(pageNum - 1, DEFAULT_PAGE_SIZE);
         return activityES.findByCategoryId(categoryId, pageable);
     }
-
 }

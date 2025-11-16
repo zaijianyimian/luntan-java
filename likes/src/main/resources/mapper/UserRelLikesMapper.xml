@@ -12,4 +12,23 @@
     <sql id="Base_Column_List">
         user_id,activity_id
     </sql>
+
+    <insert id="insertIgnoreBatch">
+        INSERT INTO user_rel_likes (user_id, activity_id)
+        VALUES
+        <foreach collection="list" item="item" separator=",">
+            (#{item.userId}, #{item.activityId})
+        </foreach>
+        ON DUPLICATE KEY UPDATE activity_id = VALUES(activity_id)
+    </insert>
+
+    <delete id="deleteBatch">
+        DELETE FROM user_rel_likes
+        WHERE (user_id, activity_id) IN
+        (
+        <foreach collection="list" item="item" separator=",">
+            (#{item.userId}, #{item.activityId})
+        </foreach>
+        )
+    </delete>
 </mapper>

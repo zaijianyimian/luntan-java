@@ -106,6 +106,12 @@ public class LikeBatchPublisher {
             m.put("activityId", Integer.parseInt(sid));
             m.put("countLikes", like);
             m.put("ts", System.currentTimeMillis());
+            try {
+                java.util.Set<String> users = stringRedisTemplate.opsForSet().members("activity:liked:users:" + sid);
+                if (users != null && !users.isEmpty()) {
+                    m.put("users", new ArrayList<>(users));
+                }
+            } catch (Exception ignore) {}
             items.add(m);
         }
         Map<String, Object> payload = new HashMap<>();

@@ -15,6 +15,7 @@ public class CommentESSave {
     private Integer activityId;
     private String description;
     private Long countLikes;
+    private String userImage;
 
     public CommentESSave(Comments c) {
         this.id = c.getId();

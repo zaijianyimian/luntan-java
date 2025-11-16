@@ -16,12 +16,12 @@ import com.example.activity.dto.GeoInfoDTO;
 public class IPController {
     @Resource
     private IpLocationsService ipLocationsService;
-    @RequestMapping("/getip")
+    @RequestMapping("/activity/getip")
     public IpInfoDTO getIp(HttpServletRequest request){
         return ipLocationsService.getClientIp(request);
     }
 
-    @RequestMapping("/getgeo")
+    @RequestMapping("/activity/getgeo")
     public GeoInfoDTO getGeo(String ipAddress){
         return ipLocationsService.getGeoInfo(ipAddress);
     }

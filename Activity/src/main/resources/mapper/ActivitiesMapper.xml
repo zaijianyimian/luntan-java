@@ -29,7 +29,7 @@
         id,author_id,title,description,category_id,count_likes,
         count_comments,count_views,tags,status,time,
         count_favorite,latitude,longitude,location,is_top,
-        top_time,author_nickname,author_image,count_photos
+        top_time,count_photos
     </sql>
 
     <!-- 范围查询：使用 Haversine 公式计算两点球面距离（单位：米） -->

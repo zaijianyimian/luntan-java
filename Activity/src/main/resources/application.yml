@@ -3,41 +3,61 @@ spring:
     name: Activity-Management
   datasource:
     driver-class-name: com.mysql.cj.jdbc.Driver
-    # 使用环境变量配置数据库连接，避免明文凭据
-    url: ${DB_URL:jdbc:mysql://localhost:3306/activity?serverTimezone=Asia/Shanghai&useUnicode=true&characterEncoding=utf-8&allowMultiQueries=true&useSSL=false&allowPublicKeyRetrieval=true}
-    username: ${DB_USERNAME:root}
-    password: ${DB_PASSWORD:}
+    url: jdbc:mysql://localhost:3306/activity?serverTimezone=Asia/Shanghai&useUnicode=true&characterEncoding=utf-8&allowMultiQueries=true&useSSL=false&allowPublicKeyRetrieval=true
+    username: root
+    password: 126824
   data:
     redis:
-      # Redis 连接参数通过环境变量传入
-      host: ${REDIS_HOST:127.0.0.1}
-      port: ${REDIS_PORT:6379}
-      password: ${REDIS_PASSWORD:}
+      host: 123.56.138.127
+      port: 6379
+      password: 123456
       timeout: 10000
       database: 0
-      username: ${REDIS_USERNAME:}
+      username: ming
   elasticsearch:
-    uris: ${ES_URIS:127.0.0.1:9200}
-    username: ${ES_USERNAME:}
-    password: ${ES_PASSWORD:}
+    uris: 123.56.138.127:9200
+    username: ming
+    password: 123456
   jackson:
     deserialization:
       fail-on-unknown-properties: false
   rabbitmq:
-    host: ${RABBIT_HOST:127.0.0.1}
-    port: ${RABBIT_PORT:5672}
-    username: ${RABBIT_USERNAME:}
-    password: ${RABBIT_PASSWORD:}
+    host: 123.56.138.127
+    port: 5672
+    username: ming
+    password: 123456
     virtual-host: /
-jwt:
-  # JWT 密钥通过环境变量注入
-  token: ${JWT_TOKEN:}
-logcat:
-  api:
-    key: ${LOGCAT_API_KEY:}
+  servlet:
+    multipart:
+      max-file-size: 20MB
+      max-request-size: 20MB
+logging:
+  level:
+    com.example.activity.feign.ServiceFeign: DEBUG
+    feign.Logger: DEBUG
 
-# GeoIP 数据库路径配置（可选）
-geoip:
-  mmdb:
-    path: ${GEOIP_MMDB_PATH:}
+jwt:
+  token: YWFhYmJiY2NjZGRkZWVlZmZmMTIzNDU2Nzg5MGFiY2RlZmdo
+longcat:
+  api:
+    key: ak_1Uk5ha1Tb3tI7iy3li4hS4Ek35G7l
+ip2region:
+  xdb:
+    path: ${IP2R_XDB_PATH:}
+    classpath: ${IP2R_XDB_CLASSPATH:ip2region_v4.xdb}
+feign:
+  client:
+    config:
+      longcat-chat:
+        url: https://api.longcat.chat
+        loggerLevel: FULL
+        connectTimeout: 5000
+        readTimeout: 30000
+
+storage:
+  endpoint: ${STORAGE_ENDPOINT:http://123.56.138.127:9000}
+  accessKey: rustfsadmin
+  secretKey: rustfsadmin
+  bucket: ${STORAGE_BUCKET:activity-photos}
+  region: ${STORAGE_REGION:us-east-1}
 

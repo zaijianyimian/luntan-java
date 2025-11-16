@@ -10,7 +10,8 @@ import com.baomidou.mybatisplus.core.mapper.BaseMapper;
 * @Entity .domain.UserRelLikes
 */
 public interface UserRelLikesMapper extends BaseMapper<UserRelLikes> {
-
+    int insertIgnoreBatch(java.util.List<UserRelLikes> items);
+    int deleteBatch(java.util.List<UserRelLikes> items);
 }
 
 

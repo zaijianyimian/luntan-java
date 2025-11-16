@@ -20,10 +20,16 @@ public class LikeBatchConsumer {
     private final AtomicReference<ConcurrentHashMap<Long, CommentCountLike>> commentAggRef = new AtomicReference<>(new ConcurrentHashMap<>());
     private final AtomicReference<ConcurrentHashMap<Integer, ActivityCountLike>> activityAggRef = new AtomicReference<>(new ConcurrentHashMap<>());
     private final AtomicReference<ConcurrentHashMap<String, com.example.likes.domain.CommentLike>> commentLikeAggRef = new AtomicReference<>(new ConcurrentHashMap<>());
+    private final AtomicReference<ConcurrentHashMap<String, com.example.likes.domain.CommentLike>> commentUnlikeAggRef = new AtomicReference<>(new ConcurrentHashMap<>());
+    private final AtomicReference<ConcurrentHashMap<String, com.example.likes.domain.UserRelLikes>> activityLikeAggRef = new AtomicReference<>(new ConcurrentHashMap<>());
+    private final AtomicReference<ConcurrentHashMap<String, com.example.likes.domain.UserRelLikes>> activityUnlikeAggRef = new AtomicReference<>(new ConcurrentHashMap<>());
 
     public ConcurrentHashMap<Long, CommentCountLike> getCommentAgg() { return commentAggRef.get(); }
     public ConcurrentHashMap<Integer, ActivityCountLike> getActivityAgg() { return activityAggRef.get(); }
     public ConcurrentHashMap<String, com.example.likes.domain.CommentLike> getCommentLikeAgg() { return commentLikeAggRef.get(); }
+    public ConcurrentHashMap<String, com.example.likes.domain.CommentLike> getCommentUnlikeAgg() { return commentUnlikeAggRef.get(); }
+    public ConcurrentHashMap<String, com.example.likes.domain.UserRelLikes> getActivityLikeAgg() { return activityLikeAggRef.get(); }
+    public ConcurrentHashMap<String, com.example.likes.domain.UserRelLikes> getActivityUnlikeAgg() { return activityUnlikeAggRef.get(); }
 
     public ConcurrentHashMap<Long, CommentCountLike> swapCommentAgg() {
         return commentAggRef.getAndSet(new ConcurrentHashMap<>());
@@ -33,6 +39,15 @@ public class LikeBatchConsumer {
     }
     public ConcurrentHashMap<String, com.example.likes.domain.CommentLike> swapCommentLikeAgg() {
         return commentLikeAggRef.getAndSet(new ConcurrentHashMap<>());
+    }
+    public ConcurrentHashMap<String, com.example.likes.domain.CommentLike> swapCommentUnlikeAgg() {
+        return commentUnlikeAggRef.getAndSet(new ConcurrentHashMap<>());
+    }
+    public ConcurrentHashMap<String, com.example.likes.domain.UserRelLikes> swapActivityLikeAgg() {
+        return activityLikeAggRef.getAndSet(new ConcurrentHashMap<>());
+    }
+    public ConcurrentHashMap<String, com.example.likes.domain.UserRelLikes> swapActivityUnlikeAgg() {
+        return activityUnlikeAggRef.getAndSet(new ConcurrentHashMap<>());
     }
 
     @RabbitListener(queues = "commentchannel")
@@ -62,6 +77,17 @@ public class LikeBatchConsumer {
                     commentLikeAggRef.get().put(commentId + ":" + userId, cl);
                 }
             }
+            JsonNode unlikes = n.get("unlikes");
+            if (unlikes != null && unlikes.isArray()) {
+                for (JsonNode u : unlikes) {
+                    long userId = u.asLong();
+                    com.example.likes.domain.CommentLike cl = new com.example.likes.domain.CommentLike();
+                    cl.setCommentId(commentId);
+                    cl.setActivityId(activityId);
+                    cl.setUserId(userId);
+                    commentUnlikeAggRef.get().put(commentId + ":" + userId, cl);
+                }
+            }
         }
     }
 
@@ -70,6 +96,7 @@ public class LikeBatchConsumer {
         JsonNode root = mapper.readTree(payload);
         JsonNode items = root.get("items");
         if (items == null || !items.isArray()) return;
+        int processed = 0;
         for (JsonNode n : items) {
             int activityId = n.get("activityId").asInt();
             long countLikes = n.get("countLikes").asLong();
@@ -77,6 +104,29 @@ public class LikeBatchConsumer {
             a.setActivityId(activityId);
             a.setCountLikes(countLikes);
             activityAggRef.get().put(activityId, a);
+
+            JsonNode users = n.get("users");
+            if (users != null && users.isArray()) {
+                for (JsonNode u : users) {
+                    long userId = u.asLong();
+                    com.example.likes.domain.UserRelLikes rel = new com.example.likes.domain.UserRelLikes();
+                    rel.setUserId(userId);
+                    rel.setActivityId(activityId);
+                    activityLikeAggRef.get().put(activityId + ":" + userId, rel);
+                }
+            }
+            JsonNode unlikes = n.get("unlikes");
+            if (unlikes != null && unlikes.isArray()) {
+                for (JsonNode u : unlikes) {
+                    long userId = u.asLong();
+                    com.example.likes.domain.UserRelLikes rel = new com.example.likes.domain.UserRelLikes();
+                    rel.setUserId(userId);
+                    rel.setActivityId(activityId);
+                    activityUnlikeAggRef.get().put(activityId + ":" + userId, rel);
+                }
+            }
+            processed++;
         }
+        org.slf4j.LoggerFactory.getLogger(LikeBatchConsumer.class).info("activity batch consumed, items={}", processed);
     }
 }

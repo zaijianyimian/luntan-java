@@ -9,15 +9,28 @@ spring:
         group: DEFAULT_GROUP
         username: nacos
         password: VxykvMqce3
+      config:
+        username: nacos
+        password: VxykvMqce3
     gateway:
-      routes:
-        - id: user
-          uri: lb://User-Management
-          predicates:
-            - Path=/api/user/**
-        - id: activity
-          uri: lb://Activity-Management
-          predicates:
-            - Path=/api/activity/**
+      server:
+        webflux:
+          routes:
+            - id: user
+              uri: lb://User-Management
+              predicates:
+                - Path=/api/user/**
+            - id: activity
+              uri: lb://Activity-Management
+              predicates:
+                - Path=/api/activity/**
+            - id: activities
+              uri: lb://Activity-Management
+              predicates:
+                - Path=/api/activities/**
+
 server:
   port: 3000
+
+jwt:
+  token: YWFhYmJiY2NjZGRkZWVlZmZmMTIzNDU2Nzg5MGFiY2RlZmdo

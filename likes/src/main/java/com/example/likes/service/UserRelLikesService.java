@@ -9,5 +9,6 @@ import com.baomidou.mybatisplus.extension.service.IService;
 * @createDate 2025-11-14 19:33:15
 */
 public interface UserRelLikesService extends IService<UserRelLikes> {
-
+    int insertIgnoreBatch(java.util.List<UserRelLikes> items);
+    int deleteBatch(java.util.List<UserRelLikes> items);
 }

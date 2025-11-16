@@ -5,4 +5,5 @@ import com.example.likes.domain.CommentLike;
 
 public interface CommentLikeMapper extends BaseMapper<CommentLike> {
     int insertIgnoreBatch(java.util.List<CommentLike> items);
+    int deleteBatch(java.util.List<CommentLike> items);
 }

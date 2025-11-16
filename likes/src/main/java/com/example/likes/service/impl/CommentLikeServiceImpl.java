@@ -17,4 +17,10 @@ public class CommentLikeServiceImpl extends ServiceImpl<CommentLikeMapper, Comme
         if (items == null || items.isEmpty()) return 0;
         return this.baseMapper.insertIgnoreBatch(items);
     }
+
+    @Override
+    public int deleteBatch(List<CommentLike> items) {
+        if (items == null || items.isEmpty()) return 0;
+        return this.baseMapper.deleteBatch(items);
+    }
 }

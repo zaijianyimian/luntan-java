@@ -16,6 +16,10 @@ public class RabbitMQConfig {
     public static final String QUEUE_ACTIVITY = "activitychannel";
     public static final String ROUTING_COMMENT = "comment";
     public static final String ROUTING_ACTIVITY = "activity";
+    @Bean
+    public org.springframework.amqp.rabbit.core.RabbitTemplate rabbitTemplate(org.springframework.amqp.rabbit.connection.ConnectionFactory cf) {
+        return new org.springframework.amqp.rabbit.core.RabbitTemplate(cf);
+    }
 
     @Bean
     public Queue commentQueue() {

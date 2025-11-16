@@ -16,7 +16,7 @@ public class ChatRequestDTO {
         this.model = "LongCat-Flash-Chat";
         this.messages = java.util.List.of(new Message("user", content));
         this.stream = false;
-        this.maxTokens = 1024;
+        this.maxTokens = 1000;
         this.temperature = 0.7;
     }
 
